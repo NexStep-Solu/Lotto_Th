@@ -1,0 +1,57 @@
+.warpform {
+    display: flex;
+    flex-direction: row;
+  }
+  
+  .nrccode {
+    max-width: 80px;
+    margin-right: 5px;
+  }
+  
+  .nrcplace {
+    max-width: 200px;
+    margin-right: 5px;
+  }
+  
+  .nrctype {
+    max-width: 100px;
+    margin-right: 5px;
+  }
+  
+  .nrcno {
+    max-width: 100%;
+    min-width: 200px;
+  }
+  
+  @media (max-width: 400px) {
+    .warpform {
+      display: flex;
+      flex-direction: column;
+      margin:5px;
+    }
+  
+    .nrccode {
+      max-width: 100%;
+      margin-right: 5px;
+      margin:5px;
+    }
+  
+    .nrcplace {
+      max-width: 100%;
+      margin-right: 5px;
+      margin:5px;
+  
+    }
+  
+    .nrctype {
+      max-width: 100%;
+      margin-right: 5px;
+      margin:5px;
+    }
+  
+    .nrcno {
+      max-width: 100%;
+      min-width: 200px;
+      margin:5px;
+    }
+  }
