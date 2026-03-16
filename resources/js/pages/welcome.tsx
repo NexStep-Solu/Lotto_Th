@@ -1,10 +1,26 @@
+import CheckerSkeleton from '@/components/checker-skeleton';
 import ColorBends from '@/components/ColorBends';
+import LotteryResult from '@/components/LotteryResult';
+import LottoResultSkeleton from '@/components/lotto-result-skeleton';
+import NumberChecker from '@/components/NumberChecker';
+import AppearanceToggleTab, { ThemeToggle } from '@/components/theme-toggle';
 import { Head, Link } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 
 export default function Welcome({ auth }: { auth: { user: any } }) {
+    const [lotto, setLotto] = useState<any>(null)
+    const [loading, setLoading] = useState(true)
+    useEffect(() => {
+        fetch("https://lotto.api.rayriffy.com/latest")
+            .then(res => res.json())
+            .then(data => {
+                setLotto(data)
+                setLoading(false)
+            })
+    }, [])
     return (
         <>
-            <Head title="Unity Microfinance ERP">
+            <Head title="Thai Lotto">
                 <link rel="preconnect" href="https://fonts.bunny.net" />
                 <link
                     href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600"
@@ -36,7 +52,6 @@ export default function Welcome({ auth }: { auth: { user: any } }) {
                             className="absolute inset-0"
                         />
                     </div>
-                    <div className="absolute inset-0 bg-gradient-to-b from-white/70 via-white/50 to-white/80 dark:from-black/60 dark:via-black/40 dark:to-black/70" />
                 </div>
 
                 <div className="relative z-10 bg-transparent">
@@ -47,19 +62,19 @@ export default function Welcome({ auth }: { auth: { user: any } }) {
                                 <div className="flex items-center gap-2">
                                     <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/40 dark:bg-white/10 backdrop-blur-md shadow-inner border border-white/40 dark:border-white/10">
                                         <span className="text-xs font-semibold tracking-tight">
-                                            U
+                                            A
                                         </span>
                                     </div>
                                     <div className="flex flex-col leading-tight">
                                         <span className="text-xs font-semibold tracking-[0.18em] text-neutral-700 uppercase dark:text-neutral-200">
-                                            Unity Microfinance Ltd
+                                            Thai Lotto
                                         </span>
                                         <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                                            Enterprise ERP · Progressive Web App
+                                            Progressive Web App
                                         </span>
                                     </div>
                                 </div>
-
+                                {/* 
                                 <div className="flex items-center gap-3">
                                     {auth.user ? (
                                         <Link
@@ -76,174 +91,62 @@ export default function Welcome({ auth }: { auth: { user: any } }) {
                                             login
                                         </Link>
                                     )}
-                                </div>
+                                </div> */}
                             </nav>
                         </div>
                     </header>
 
-                    {/* MAIN CONTENT */}
-                    <main className="mx-auto w-full max-w-[335px] px-4 py-2 text-sm lg:max-w-7xl lg:px-8">
-                        {/* HERO */}
-                        <section className="flex min-h-[60vh] flex-col lg:flex-row lg:items-center lg:gap-16">
-                            <div className="flex-1 space-y-5 pt-4 pb-10 lg:pt-0">
-                                <span className="inline-flex items-center rounded-full border border-white/60 bg-white/80 px-3 py-1 text-[10px] font-medium tracking-[0.18em] text-neutral-600 uppercase shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/10 dark:text-neutral-200">
-                                    Unity Microfinance ERP · PWA
-                                </span>
+                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 px-6">
 
-                                <h1 className="text-3xl font-semibold tracking-tight text-neutral-900 sm:text-4xl lg:text-5xl dark:text-neutral-50">
-                                    Welcome to your unified microfinance operations workspace.
-                                </h1>
+                        {/* LEFT CHECKER */}
+                        <div className="lg:col-span-1 lg:sticky top-24 h-fit">
 
-                                <p className="max-w-xl text-[13px] leading-relaxed text-neutral-700 dark:text-neutral-300">
-                                    Unity ERP connects branches, loan officers, and head office in one secure browser‑based system. Access loans, savings,
-                                    groups, accounting, and reports from any device with a single sign‑on.
-                                </p>
+                            {loading ? (
+                                <CheckerSkeleton />
+                            ) : (
+                                <NumberChecker lotto={lotto} />
+                            )}
 
-                                <div className="flex flex-wrap items-center gap-3 pt-1">
-                                    {auth.user ? (
-                                        <Link
-                                            href={route('dashboard')}
-                                            className="inline-flex items-center justify-center rounded-md border border-neutral-900/20 bg-neutral-900 px-4 py-2 text-xs font-medium text-white shadow-sm transition hover:bg-black dark:border-white/10 dark:bg-white dark:text-black dark:hover:bg-neutral-100"
-                                        >
-                                            Go to dashboard
-                                        </Link>
-                                    ) : (
-                                        <Link
-                                            href={route('login')}
-                                            className="inline-flex items-center justify-center rounded-md border border-neutral-900/20 bg-neutral-900 px-4 py-2 text-xs font-medium text-white shadow-sm transition hover:bg-black dark:border-white/10 dark:bg-white dark:text-black dark:hover:bg-neutral-100"
-                                        >
-                                            Proceed to secure login
-                                        </Link>
-                                    )}
-                                </div>
+                        </div>
 
-                                <div className="flex flex-wrap gap-4 pt-3 text-[11px] text-neutral-600 dark:text-neutral-400">
-                                    <div>
-                                        <span className="font-semibold text-neutral-900 dark:text-neutral-100">
-                                            Branch &amp; field‑ready
-                                        </span>{' '}
-                                        optimized for loan officers, cashiers, and managers.
-                                    </div>
-                                </div>
-                            </div>
+                        {/* RIGHT RESULTS */}
+                        <div className="lg:col-span-4 my-6">
 
-                            <div className="flex-1 pb-10 lg:pb-0">
-                                <div className="mx-auto max-w-md rounded-3xl border border-white/80 bg-white/85 p-5 shadow-xl backdrop-blur-2xl dark:border-white/10 dark:bg-[#050507]/92">
-                                    <div className="mb-3 flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-neutral-900 text-white dark:bg-white dark:text-black">
-                                                <span className="text-[11px] font-semibold">U</span>
-                                            </div>
-                                            <div className="flex flex-col leading-tight">
-                                                <span className="text-[11px] font-semibold text-neutral-900 dark:text-neutral-50">
-                                                    Unity Microfinance Ltd
-                                                </span>
-                                                <span className="text-[10px] text-neutral-500 dark:text-neutral-400">
-                                                    Staff access portal
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
-                                            Secure · SSL
-                                        </span>
-                                    </div>
+                            {loading ? (
+                                <LottoResultSkeleton />
+                            ) : (
+                                <LotteryResult data={lotto} />
+                            )}
 
-                                    <p className="mb-3 text-[11px] text-neutral-600 dark:text-neutral-300">
-                                        Continue to the login screen with your Unity credentials. Access is restricted to authorized Unity Microfinance staff.
-                                    </p>
+                        </div>
 
-                                    {auth.user ? (
-                                        <Link
-                                            href={route('dashboard')}
-                                            className="mb-3 inline-flex w-full items-center justify-center rounded-md bg-neutral-900 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-black dark:bg-white dark:text-black"
-                                        >
-                                            Go to dashboard
-                                        </Link>
-                                    ) : (
-                                        <Link
-                                            href={route('login')}
-                                            className="mb-3 inline-flex w-full items-center justify-center rounded-md bg-neutral-900 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-black dark:bg-white dark:text-black"
-                                        >
-                                            Go to login
-                                        </Link>
-                                    )}
+                    </div>
+                    <footer className="sticky bottom-0 z-50 border-b border-white/30 dark:border-white/10 bg-white/50 dark:bg-black/40 backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/40 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
 
-                                    <div className="space-y-1 text-[10px] text-neutral-500 dark:text-neutral-400">
-                                        <div>Branch staff · Head office · Internal audit · IT admin.</div>
-                                        <div>Having trouble? Contact IT support or your branch administrator before attempting to log in again.</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
+                        <div className="mx-auto max-w-7xl px-6 py-6 flex flex-col md:flex-row items-center justify-between text-sm text-neutral-600 dark:text-neutral-300">
 
-                        {/* FEATURES SECTION */}
-                        <section className="mt-10 border-t border-white/60 pt-8 dark:border-white/10">
-                            <h2 className="text-base font-semibold tracking-tight text-neutral-900 dark:text-neutral-50">
-                                Core modules for daily operations
-                            </h2>
-                            <p className="mt-2 max-w-2xl text-sm text-neutral-700 dark:text-neutral-300">
-                                Streamline microfinance workflows from loan origination to portfolio monitoring with tightly integrated functional modules.
+                            <p>
+                                © {new Date().getFullYear()} Thai Lotto Checker
                             </p>
 
-                            <div className="mt-4 grid gap-4 text-sm text-neutral-700 sm:grid-cols-2 lg:grid-cols-3 dark:text-neutral-300">
-                                <div className="rounded-xl border border-white/70 bg-white/80 p-4 backdrop-blur-sm dark:border-white/10 dark:bg-white/5">
-                                    <h3 className="text-[11px] font-semibold text-neutral-900 dark:text-neutral-50">
-                                        Loans &amp; collections
-                                    </h3>
-                                    <p className="mt-1">
-                                        Handle applications, approvals, schedules, and daily collections with clear branch and officer accountability.
-                                    </p>
-                                </div>
-                                <div className="rounded-xl border border-white/70 bg-white/80 p-4 backdrop-blur-sm dark:border-white/10 dark:bg-white/5">
-                                    <h3 className="text-[11px] font-semibold text-neutral-900 dark:text-neutral-50">
-                                        Savings &amp; groups
-                                    </h3>
-                                    <p className="mt-1">
-                                        Manage group portfolios, voluntary and compulsory savings, and account balances in real time.
-                                    </p>
-                                </div>
-                                <div className="rounded-xl border border-white/70 bg-white/80 p-4 backdrop-blur-sm dark:border-white/10 dark:bg-white/5">
-                                    <h3 className="text-[11px] font-semibold text-neutral-900 dark:text-neutral-50">
-                                        Accounting &amp; GL
-                                    </h3>
-                                    <p className="mt-1">
-                                        Sync operational transactions to the general ledger with controlled posting and audit trails.
-                                    </p>
-                                </div>
+                            <div className="flex items-center gap-6 mt-3 md:mt-0">
+                                <a href="#" className="hover:text-green-500 transition">
+                                    API Source
+                                </a>
+
+                                <a href="#" className="hover:text-green-500 transition">
+                                    Privacy
+                                </a>
+
+                                <a href="#" className="hover:text-green-500 transition">
+                                    Contact
+                                </a>
+                                <AppearanceToggleTab />
                             </div>
-                        </section>
 
-                        {/* SECURITY SECTION */}
-                        <section className="mt-10 border-t border-white/60 pt-8 dark:border-white/10">
-                            <h2 className="text-sm font-semibold tracking-tight text-neutral-900 dark:text-neutral-50">
-                                Security and access control
-                            </h2>
-                            <p className="mt-2 max-w-2xl text-[12px] text-neutral-700 dark:text-neutral-300">
-                                Protect client data and financial records with role‑based access and hardened browser‑only entry points.
-                            </p>
+                        </div>
 
-                            <ul className="mt-3 space-y-1 text-[11px] text-neutral-700 dark:text-neutral-300">
-                                <li>Single sign‑on with staff credentials and centralized user management.</li>
-                                <li>Role‑based permissions for branch, head office, audit, and IT users.</li>
-                                <li>End‑to‑end SSL encryption for traffic between browser and server.</li>
-                            </ul>
-                        </section>
-
-                        {/* FOOTER / SUPPORT SECTION */}
-                        <section className="mt-10 border-t border-white/60 pb-4 pt-8 text-[11px] text-neutral-600 dark:border-white/10 dark:text-neutral-400">
-                            <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                                <div>
-                                    <span className="font-medium text-neutral-800 dark:text-neutral-100">
-                                        Need assistance?
-                                    </span>{' '}
-                                    Contact IT support or your branch admin for access requests or password resets.
-                                </div>
-                                <div className="text-[10px]">
-                                    Unity Microfinance ERP · Internal use only · All access is logged.
-                                </div>
-                            </div>
-                        </section>
-                    </main>
+                    </footer>
                 </div>
             </div>
         </>
