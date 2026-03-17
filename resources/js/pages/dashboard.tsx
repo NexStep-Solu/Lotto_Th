@@ -14,6 +14,9 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
+import { translateLottoName } from '@/lib/lottoTranslate'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Info } from 'lucide-react'
 function checkNumber(num: string, lotto: any) {
     const prizes = lotto.response.prizes
     const running = lotto.response.runningNumbers
@@ -78,7 +81,7 @@ export default function Dashboard() {
             .then(data => setLotto(data))
     }
     const totalWin = results.filter(r => r.status !== "LOSE").length
-    const totalReward = results.reduce((sum, r) => sum + (r.reward || 0), 0)
+    const totalReward = results.reduce((sum, r) => sum + (Number(r.reward) || 0), 0)
     const handleFileUpload = (e: any) => {
         const file = e.target.files[0]
         if (!file) return
@@ -107,52 +110,134 @@ export default function Dashboard() {
 
         reader.readAsArrayBuffer(file)
     }
+    const totalWON = results.filter(r => r.status !== "LOSE");
     return (
-        <AppLayout breadcrumbs={[]}>
+        <AppLayout breadcrumbs={[
+            {
+                title: 'Dashboard',
+                href: '/dashboard',
+            },
+        ]}>
             <Head title="Supplier Checker" />
+            <div className='grid grid-cols-2 gap-6 mt-4 mx-4'>
+                <div className="">
 
-            <div className="p-6 space-y-6 max-w-6xl mx-auto">
+                    {/* DATE PICKER */}
+                    <LotteryDatePicker onSelect={handleSelectDate} />
 
-                {/* DATE PICKER */}
-                <LotteryDatePicker onSelect={handleSelectDate} />
+                    {/* INPUT */}
+                    <Card className='my-4'>
+                        <CardHeader>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="flex items-center gap-2">
+                                    Paste Numbers
+                                    <span className="text-sm text-muted-foreground">("Enter numbers, one per line")</span>
 
-                {/* INPUT */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Paste Numbers</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Upload Excel</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <input
-                                    type="file"
-                                    accept=".xlsx,.csv"
-                                    onChange={handleFileUpload}
-                                />
-                            </CardContent>
-                        </Card>
-                        <Textarea
-                            placeholder="Enter numbers (one per line)"
-                            value={numbers}
-                            onChange={(e) => setNumbers(e.target.value)}
-                        />
-                    </CardContent>
-                </Card>
+                                    {/* Info Popover */}
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button variant="outline" size="icon">
+                                                <Info className="h-4 w-4" />
+                                            </Button>
+                                        </PopoverTrigger>
 
-                {/* BUTTON */}
-                <Button
-                    onClick={() => handleCheck()}
-                    disabled={!lotto}
-                >
-                    Check Numbers
-                </Button>
+                                        <PopoverContent className="w-72">
+                                            <h4 className="font-semibold mb-2">Excel Import Template</h4>
+                                            <p className="text-sm text-muted-foreground mb-2">
+                                                Please use the following format when importing numbers:
+                                            </p>
+                                            <ul className="text-sm list-disc pl-5 space-y-1">
+                                                <li>One number per row</li>
+                                                <li>Each number must be 6 digits (pad with leading 0 if needed)</li>
+                                                <li>Do not include headers or extra columns</li>
+                                                <li>Supported file types: .xlsx, .csv</li>
+                                            </ul>
 
+                                            <p className="text-xs text-muted-foreground mt-2">Example:</p>
+                                            <pre className="text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                                                {`123456
+654321
+111222`}
+                                            </pre>
+                                        </PopoverContent>
+                                    </Popover>
+                                </CardTitle>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <Card className='my-2'>
+                                <CardHeader>
+                                    <CardTitle>Upload Excel</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <input
+                                        type="file"
+                                        accept=".xlsx,.csv"
+                                        onChange={handleFileUpload}
+                                    />
+                                </CardContent>
+                            </Card>
+                            <Textarea
+                                placeholder="Enter numbers (one per line)"
+                                value={numbers}
+                                onChange={(e) => setNumbers(e.target.value)}
+                            />
+                            <Button
+                                onClick={() => handleCheck()}
+                                disabled={!lotto}
+                                className='mt-2 w-full'
+                            >
+                                Check Numbers
+                            </Button>
+                        </CardContent>
+                    </Card>
+
+                    {/* BUTTON */}
+
+
+                </div>
+                <div>
+                    <Card className=''>
+                        <CardHeader>
+                            <CardTitle>Win Results</CardTitle>
+                        </CardHeader>
+
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Number</TableHead>
+                                        <TableHead>Prize</TableHead>
+                                        <TableHead>Reward</TableHead>
+                                        <TableHead>Status</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+
+                                <TableBody>
+                                    {totalWON?.map((r, i) => (
+                                        <TableRow key={i}>
+                                            <TableCell>{r.number}</TableCell>
+                                            <TableCell>{translateLottoName(r.prize) ?? "-"}</TableCell>
+                                            <TableCell>{Number(r.reward).toLocaleString()}</TableCell>
+                                            <TableCell>
+                                                {r.status === "WIN"
+                                                    ? "BIG WIN"
+                                                    : r.status === "RUNNING"
+                                                        ? "WON"
+                                                        : "❌"}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+
+                </div>
             </div>
+
             {results.length > 0 && (
-                <Card>
+                <Card className='m-4'>
                     <CardHeader>
                         <CardTitle>Results</CardTitle>
                     </CardHeader>
@@ -168,7 +253,7 @@ export default function Dashboard() {
                             </Card>
 
                             <Card className="p-4">
-                                Total Reward: {totalReward} THB
+                                Total Reward: {Number(totalReward).toLocaleString()} THB
                             </Card>
                         </div>
                         <Table>
@@ -185,13 +270,13 @@ export default function Dashboard() {
                                 {results.map((r, i) => (
                                     <TableRow key={i}>
                                         <TableCell>{r.number}</TableCell>
-                                        <TableCell>{r.prize ?? "-"}</TableCell>
-                                        <TableCell>{r.reward}</TableCell>
+                                        <TableCell>{translateLottoName(r.prize) ?? "-"}</TableCell>
+                                        <TableCell>{Number(r.reward).toLocaleString()}</TableCell>
                                         <TableCell>
                                             {r.status === "WIN"
-                                                ? "🎉"
+                                                ? "BIG WIN"
                                                 : r.status === "RUNNING"
-                                                    ? "✨"
+                                                    ? "WON"
                                                     : "❌"}
                                         </TableCell>
                                     </TableRow>

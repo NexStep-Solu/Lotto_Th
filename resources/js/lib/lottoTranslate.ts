@@ -1,6 +1,6 @@
 export const prizeTranslate: Record<string, string> = {
     "รางวัลที่ 1": "First Prize",
-    "รางวัลข้างเคียงรางวัลที่ 1": "First Prize Neighbors",
+    "รางวัลข้างเคียงรางวัลที่ 1": "Consolation prizes for the first prize",
     "รางวัลที่ 2": "Second Prize",
     "รางวัลที่ 3": "Third Prize",
     "รางวัลที่ 4": "Fourth Prize",
