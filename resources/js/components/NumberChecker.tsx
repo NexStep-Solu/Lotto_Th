@@ -77,7 +77,7 @@ export default function NumberChecker({ lotto }: any) {
 
     return (
         <>
-            <Card>
+            <Card className="mt-4">
                 <CardHeader>
                     <CardTitle>Lottery Checker</CardTitle>
                 </CardHeader>
@@ -107,7 +107,7 @@ export default function NumberChecker({ lotto }: any) {
                         <>
                             <DialogHeader>
                                 <DialogTitle className="text-green-600 text-2xl">
-                                    🎉 Congratulations!
+                                    Congratulations!
                                 </DialogTitle>
                             </DialogHeader>
 

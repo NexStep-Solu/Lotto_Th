@@ -63,7 +63,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                     <div className="text-primary-foreground flex size-6 items-center justify-center rounded-md">
                         <img src="./favicon.ico" alt="Unity Microfinance" />
                     </div>
-                    <span className="hidden sm:inline">Unity Microfinance Ltd.</span>
+                    <span className="hidden sm:inline">Welcome Stranger</span>
                 </a>
             </div>
 
@@ -98,11 +98,6 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                                                     <div className="grid gap-2">
                                                         <div className="flex items-center">
                                                             <Label htmlFor="password">Password</Label>
-                                                            {canResetPassword && (
-                                                                <TextLink href={route('password.request')} className="ml-auto text-sm" tabIndex={5}>
-                                                                    Forgot password?
-                                                                </TextLink>
-                                                            )}
                                                         </div>
                                                         <Input
                                                             id="password"
@@ -161,7 +156,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                                         rippleSpeed={1.5}
                                         autoAnimate
                                         rippleOnClick
-                                    />  
+                                    />
                                 </div>
                             </CardContent>
                         </Card>

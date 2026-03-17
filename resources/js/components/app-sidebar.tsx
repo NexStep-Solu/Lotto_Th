@@ -30,30 +30,26 @@ export function AppSidebar() {
     //     { title: 'Customers', href: '/customers', icon: UserCircle, permission: 'view_customers' },
     // ].filter((item) => hasPermission((item as NavItem & { permission: string }).permission)) as NavItem[];
 
-    const masterNavItems: NavItem[] = [
-        { title: 'Currency', href: '/currencies', icon: Coins, permission: 'view_currencies' },
-        { title: 'Departments', href: '/departments', icon: CableIcon, permission: 'view_departments' },
-        { title: 'Locations', href: '/locations', icon: LocateIcon, permission: 'view_locations' },
-        { title: 'Branches', href: '/branches', icon: StoreIcon, permission: 'view_branches' },
-    ].filter((item) => hasPermission((item as NavItem & { permission: string }).permission)) as NavItem[];
+    // const masterNavItems: NavItem[] = [
+    //     { title: 'Currency', href: '/currencies', icon: Coins, permission: 'view_currencies' },
+    // ].filter((item) => hasPermission((item as NavItem & { permission: string }).permission)) as NavItem[];
 
     const footerNavItems: NavItem[] = [];
 
     const navGroups: NavGroup[] = [];
 
     const hasMasterPermission = hasAny(['view_currencies', 'view_departments', 'view_locations', 'view_branches']);
-    const hasCustomerPermission = hasAny(['view_creditlevels', 'view_customers', 'view_loans']);
     const hasAdminPermission = hasAny(['view_users', 'view_roles', 'view_permissions']);
 
-    if (hasMasterPermission) {
-        if (masterNavItems.length > 0) {
-            navGroups.push({
-                title: 'Master Setup',
-                items: masterNavItems,
-                icon: Settings,
-            });
-        }
-    }
+    // if (hasMasterPermission) {
+    //     if (masterNavItems.length > 0) {
+    //         navGroups.push({
+    //             title: 'Master Setup',
+    //             items: masterNavItems,
+    //             icon: Settings,
+    //         });
+    //     }
+    // }
     // if (hasCustomerPermission) {
     //     if (customerNavItems.length > 0) {
     //         navGroups.push({

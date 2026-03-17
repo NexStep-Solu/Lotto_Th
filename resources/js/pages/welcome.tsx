@@ -1,5 +1,6 @@
 import CheckerSkeleton from '@/components/checker-skeleton';
 import ColorBends from '@/components/ColorBends';
+import LotteryDatePicker from '@/components/LotteryDatePicker';
 import LotteryResult from '@/components/LotteryResult';
 import LottoResultSkeleton from '@/components/lotto-result-skeleton';
 import NumberChecker from '@/components/NumberChecker';
@@ -18,6 +19,11 @@ export default function Welcome({ auth }: { auth: { user: any } }) {
                 setLoading(false)
             })
     }, [])
+    const handleSelectDate = (id: string) => {
+        fetch(`https://lotto.api.rayriffy.com/lotto/${id}`)
+            .then(res => res.json())
+            .then(data => setLotto(data))
+    }
     return (
         <>
             <Head title="Thai Lotto">
@@ -74,7 +80,7 @@ export default function Welcome({ auth }: { auth: { user: any } }) {
                                         </span>
                                     </div>
                                 </div>
-                                {/* 
+
                                 <div className="flex items-center gap-3">
                                     {auth.user ? (
                                         <Link
@@ -91,7 +97,7 @@ export default function Welcome({ auth }: { auth: { user: any } }) {
                                             login
                                         </Link>
                                     )}
-                                </div> */}
+                                </div>
                             </nav>
                         </div>
                     </header>
@@ -99,12 +105,17 @@ export default function Welcome({ auth }: { auth: { user: any } }) {
                     <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 px-6">
 
                         {/* LEFT CHECKER */}
-                        <div className="lg:col-span-1 lg:sticky top-24 h-fit">
+                        <div className="lg:col-span-1 lg:sticky top-20 h-fit">
 
                             {loading ? (
                                 <CheckerSkeleton />
                             ) : (
-                                <NumberChecker lotto={lotto} />
+                                <>
+                                    <NumberChecker lotto={lotto} />
+                                    <div className="my-4">
+                                        <LotteryDatePicker onSelect={handleSelectDate} />
+                                    </div>
+                                </>
                             )}
 
                         </div>
