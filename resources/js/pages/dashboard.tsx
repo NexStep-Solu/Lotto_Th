@@ -26,16 +26,32 @@ function checkNumber(num: string, lotto: any) {
         }
     }
 
-    // running numbers (last digits)
+    // running numbers
+    const first3 = num.slice(0, 3);
+    const last3 = num.slice(-3);
+    const last2 = num.slice(-2);
+
     for (const r of running) {
-        for (const rn of r.number) {
-            if (num.endsWith(rn)) {
-                return {
-                    prize: r.name,
-                    reward: r.reward,
-                    status: 'RUNNING',
-                };
-            }
+        if (r.id === 'runningNumberFrontThree' && r.number.includes(first3)) {
+            return {
+                prize: r.name,
+                reward: r.reward,
+                status: 'RUNNING',
+            };
+        }
+        if (r.id === 'runningNumberBackThree' && r.number.includes(last3)) {
+            return {
+                prize: r.name,
+                reward: r.reward,
+                status: 'RUNNING',
+            };
+        }
+        if (r.id === 'runningNumberBackTwo' && r.number.includes(last2)) {
+            return {
+                prize: r.name,
+                reward: r.reward,
+                status: 'RUNNING',
+            };
         }
     }
 
