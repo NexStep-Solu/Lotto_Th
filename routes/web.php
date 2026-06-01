@@ -4,6 +4,7 @@
 use App\Http\Controllers\Auth\SocialLoginController;
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\CashDashboardController;
+use App\Http\Controllers\LottoController;
 
 use App\Http\Controllers\CurrencyController;
 
@@ -15,6 +16,12 @@ use App\Http\Controllers\LocationController;
 use App\Http\Middleware\AdminOnly;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+
+Route::prefix('api/lotto')->group(function () {
+    Route::get('latest', [LottoController::class, 'latest']);
+    Route::get('lotto/{id}', [LottoController::class, 'show']);
+    Route::get('list', [LottoController::class, 'list']);
+});
 
 Route::get('/offline', function () {
     return view('offline');

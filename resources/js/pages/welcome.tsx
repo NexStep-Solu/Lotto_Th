@@ -12,7 +12,7 @@ export default function Welcome({ auth }: { auth: { user: any } }) {
     const [lotto, setLotto] = useState<any>(null)
     const [loading, setLoading] = useState(true)
     useEffect(() => {
-        fetch("https://lotto.api.rayriffy.com/latest")
+        fetch("/api/lotto/latest")
             .then(res => res.json())
             .then(data => {
                 setLotto(data)
@@ -20,7 +20,7 @@ export default function Welcome({ auth }: { auth: { user: any } }) {
             })
     }, [])
     const handleSelectDate = (id: string) => {
-        fetch(`https://lotto.api.rayriffy.com/lotto/${id}`)
+        fetch(`/api/lotto/lotto/${id}`)
             .then(res => res.json())
             .then(data => setLotto(data))
     }

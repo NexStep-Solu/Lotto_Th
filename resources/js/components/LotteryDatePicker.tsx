@@ -21,23 +21,18 @@ export default function LotteryDatePicker({ onSelect }: any) {
     const [open, setOpen] = useState(false)
     const [value, setValue] = useState("")
     const [dates, setDates] = useState<any[]>([])
-    const [page, setPage] = useState(1)
     const [loading, setLoading] = useState(false)
 
-    const fetchDates = async (pageNum: number) => {
+    const fetchDates = async () => {
         setLoading(true)
-
-        const res = await fetch(
-            `https://lotto.api.rayriffy.com/list/${pageNum}`
-        )
+        const res = await fetch("/api/lotto/list")
         const data = await res.json()
-
-        setDates((prev) => [...prev, ...data.response])
+        setDates(data.response)
         setLoading(false)
     }
 
     useEffect(() => {
-        fetchDates(1)
+        fetchDates()
     }, [])
 
     useEffect(() => {
@@ -46,12 +41,6 @@ export default function LotteryDatePicker({ onSelect }: any) {
             onSelect(dates[0].id)
         }
     }, [dates])
-
-    const loadMore = () => {
-        const nextPage = page + 1
-        setPage(nextPage)
-        fetchDates(nextPage)
-    }
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -71,7 +60,6 @@ export default function LotteryDatePicker({ onSelect }: any) {
                 </Button>
             </PopoverTrigger>
 
-            {/* ✅ MATCH WIDTH */}
             <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
                 <Command>
                     <CommandGroup className="max-h-64 overflow-y-auto">
@@ -98,18 +86,6 @@ export default function LotteryDatePicker({ onSelect }: any) {
                                 {convertThaiDate(d.date)}
                             </CommandItem>
                         ))}
-
-                        {/* LOAD MORE */}
-                        <div className="p-2 border-t">
-                            <Button
-                                variant="ghost"
-                                className="w-full text-xs"
-                                onClick={loadMore}
-                                disabled={loading}
-                            >
-                                {loading ? "Loading..." : "Load more"}
-                            </Button>
-                        </div>
 
                     </CommandGroup>
                 </Command>

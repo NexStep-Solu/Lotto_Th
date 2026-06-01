@@ -91,7 +91,7 @@ export default function Dashboard() {
     };
     // fetch selected lotto
     const handleSelectDate = (id: string) => {
-        fetch(`https://lotto.api.rayriffy.com/lotto/${id}`)
+        fetch(`/api/lotto/lotto/${id}`)
             .then((res) => res.json())
             .then((data) => setLotto(data));
     };
