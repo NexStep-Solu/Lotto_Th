@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\SocialLoginController;
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\CashDashboardController;
 use App\Http\Controllers\LottoController;
+use App\Http\Controllers\SgLottoController;
 
 use App\Http\Controllers\CurrencyController;
 
@@ -21,6 +22,12 @@ Route::prefix('api/lotto')->group(function () {
     Route::get('latest', [LottoController::class, 'latest']);
     Route::get('lotto/{id}', [LottoController::class, 'show']);
     Route::get('list', [LottoController::class, 'list']);
+});
+
+Route::prefix('api/lotto/sg')->group(function () {
+    Route::get('latest', [SgLottoController::class, 'latest']);
+    Route::get('lotto/{id}', [SgLottoController::class, 'show']);
+    Route::get('list', [SgLottoController::class, 'list']);
 });
 
 Route::get('/offline', function () {

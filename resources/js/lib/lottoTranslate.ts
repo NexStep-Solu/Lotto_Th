@@ -13,6 +13,16 @@ export const runningTranslate: Record<string, string> = {
     "รางวัลเลขท้าย 2 ตัว": "Back 2 Digits",
 }
 
+export const sgPrizeNames: Record<string, string> = {
+    firstPrize: "1st Prize",
+    secondPrize: "2nd Prize",
+    thirdPrize: "3rd Prize",
+    jackpotPrize: "Jackpot Prize",
+    luckyPrize: "Lucky Prize",
+    giftPrize: "Gift Prize",
+    consolationPrize: "Consolation Prize",
+    participationPrize: "Participation Prize",
+}
 
 export function convertThaiDate(date: string) {
     const months: any = {
@@ -38,6 +48,11 @@ export function convertThaiDate(date: string) {
 
     return `${day} ${month} ${year}`
 }
+
 export function translateLottoName(name: string) {
     return prizeTranslate[name] || runningTranslate[name] || name
-  }
+}
+
+export function formatDate(date: string) {
+    return date
+}
