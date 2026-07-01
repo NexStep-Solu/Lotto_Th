@@ -9,9 +9,10 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { translateLottoName, sgPrizeNames } from '@/lib/lottoTranslate';
 import { Head } from '@inertiajs/react';
-import { Info } from 'lucide-react';
-import { useState } from 'react';
+import { Info, Printer } from 'lucide-react';
+import { useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
+import * as domtoimage from 'dom-to-image-more';
 
 type LottoTab = 'thai' | 'singapore';
 
@@ -74,6 +75,25 @@ export default function Dashboard() {
     const [results, setResults] = useState<any[]>([]);
     const [resultsPage, setResultsPage] = useState(1);
     const [winnersPage, setWinnersPage] = useState(1);
+    const printRef = useRef<HTMLDivElement>(null);
+
+    const handlePrintImage = async () => {
+        if (!printRef.current || results.length === 0) return;
+        const imgData = await domtoimage.toPng(printRef.current, {
+            bgColor: '#ffffff',
+            scale: 2,
+            style: {
+                'font-family': 'sans-serif',
+            },
+        });
+        const win = window.open('');
+        if (win) {
+            win.document.write(
+                `<html><head><title>Lottery Results</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh"><img src="${imgData}" style="max-width:100%;height:auto" onload="window.print();window.close()" /></body></html>`
+            );
+            win.document.close();
+        }
+    };
 
     const currentLotto = tab === 'thai' ? lotto : sgLotto;
 
@@ -312,7 +332,13 @@ export default function Dashboard() {
                 {results.length > 0 && (
                     <Card className="m-4">
                         <CardHeader>
-                            <CardTitle>Results</CardTitle>
+                            <div className="flex items-center justify-between">
+                                <CardTitle>Results</CardTitle>
+                                <Button variant="outline" size="sm" onClick={handlePrintImage}>
+                                    <Printer className="h-4 w-4 mr-2" />
+                                    Print Image
+                                </Button>
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <div className="flex gap-4">
@@ -380,6 +406,77 @@ export default function Dashboard() {
                             )}
                         </CardContent>
                     </Card>
+                )}
+
+                {results.length > 0 && (
+                    <div ref={printRef} className="m-4 p-6 bg-white text-black" style={{ width: '800px' }}>
+                        <div className="text-center mb-6">
+                            <h1 className="text-2xl font-bold">Lottery Results</h1>
+                            <p className="text-sm text-gray-500">
+                                {tab === 'thai' ? 'Thai Lotto' : 'Singapore Sweep'}
+                                {currentLotto?.response?.date ? ` - ${currentLotto.response.date}` : ''}
+                            </p>
+                        </div>
+
+                        <div className="mb-6">
+                            <h2 className="text-lg font-semibold mb-3 border-b pb-1">Win Results</h2>
+                            <table className="w-full text-sm border-collapse border border-gray-300">
+                                <thead>
+                                    <tr className="bg-gray-100">
+                                        <th className="border border-gray-300 p-2 text-left">#</th>
+                                        <th className="border border-gray-300 p-2 text-left">Number</th>
+                                        <th className="border border-gray-300 p-2 text-left">Prize</th>
+                                        <th className="border border-gray-300 p-2 text-right">Reward</th>
+                                        <th className="border border-gray-300 p-2 text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {totalWON.map((r: any, i: number) => (
+                                        <tr key={i} className={i % 2 === 0 ? 'bg-gray-50' : ''}>
+                                            <td className="border border-gray-300 p-2">{i + 1}</td>
+                                            <td className="border border-gray-300 p-2">{r.number}</td>
+                                            <td className="border border-gray-300 p-2">{translateName(r.prize)}</td>
+                                            <td className="border border-gray-300 p-2 text-right">{Number(r.reward).toLocaleString()}</td>
+                                            <td className="border border-gray-300 p-2 text-center font-semibold">{r.status === 'WIN' ? 'BIG WIN' : 'WON'}</td>
+                                        </tr>
+                                    ))}
+                                    {totalWON.length === 0 && (
+                                        <tr>
+                                            <td colSpan={5} className="border border-gray-300 p-4 text-center text-gray-500">No winners</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div>
+                            <h2 className="text-lg font-semibold mb-3 border-b pb-1">Total Results</h2>
+                            <table className="w-full text-sm border-collapse border border-gray-300">
+                                <thead>
+                                    <tr className="bg-gray-100">
+                                        <th className="border border-gray-300 p-2 text-left">Description</th>
+                                        <th className="border border-gray-300 p-2 text-right">Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr className="bg-gray-50">
+                                        <td className="border border-gray-300 p-2 font-medium">Total Numbers Checked</td>
+                                        <td className="border border-gray-300 p-2 text-right">{results.length.toLocaleString()}</td>
+                                    </tr>
+                                    <tr>
+                                        <td className="border border-gray-300 p-2 font-medium">Total Winners</td>
+                                        <td className="border border-gray-300 p-2 text-right text-green-700 font-semibold">{totalWin.toLocaleString()}</td>
+                                    </tr>
+                                    <tr className="bg-gray-50">
+                                        <td className="border border-gray-300 p-2 font-medium">Total Reward</td>
+                                        <td className="border border-gray-300 p-2 text-right text-green-700 font-semibold">
+                                            {Number(totalReward).toLocaleString()} {tab === 'thai' ? 'THB' : 'SGD'}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 )}
             </div>
         </AppLayout>
