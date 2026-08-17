@@ -203,7 +203,7 @@ export default function Dashboard() {
                     </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                     <div>
                         {tab === 'thai' ? (
                             <LotteryDatePicker onSelect={handleSelectDate} />
@@ -288,7 +288,7 @@ export default function Dashboard() {
                                 </Table>
                                 {winnersTotalPages > 1 && (
                                     <Pagination className="mt-4">
-                                        <PaginationContent>
+                                        <PaginationContent className="flex-wrap justify-center">
                                             <PaginationItem>
                                                 <PaginationPrevious
                                                     href="#"
@@ -330,7 +330,7 @@ export default function Dashboard() {
                 </div>
 
                 {results.length > 0 && (
-                    <Card className="m-4">
+                    <Card className="mt-6">
                         <CardHeader>
                             <div className="flex items-center justify-between">
                                 <CardTitle>Results</CardTitle>
@@ -341,7 +341,7 @@ export default function Dashboard() {
                             </div>
                         </CardHeader>
                         <CardContent>
-                            <div className="flex gap-4">
+                            <div className="flex flex-wrap gap-4">
                                 <Card className="p-4">Total Checked: {results.length}</Card>
                                 <Card className="p-4">Winners: {totalWin}</Card>
                                 <Card className="p-4">Total Reward: {Number(totalReward).toLocaleString()} {tab === 'thai' ? 'THB' : 'SGD'}</Card>
@@ -368,7 +368,7 @@ export default function Dashboard() {
                             </Table>
                             {resultsTotalPages > 1 && (
                                 <Pagination className="mt-4">
-                                    <PaginationContent>
+                                    <PaginationContent className="flex-wrap justify-center">
                                         <PaginationItem>
                                             <PaginationPrevious
                                                 href="#"
@@ -409,7 +409,11 @@ export default function Dashboard() {
                 )}
 
                 {results.length > 0 && (
-                    <div ref={printRef} className="m-4 p-6 bg-white text-black" style={{ width: '800px' }}>
+                    <div
+                        ref={printRef}
+                        className="p-6 bg-white text-black"
+                        style={{ position: 'fixed', left: '-9999px', top: 0, width: '800px' }}
+                    >
                         <div className="text-center mb-6">
                             <h1 className="text-2xl font-bold">Lottery Results</h1>
                             <p className="text-sm text-gray-500">
