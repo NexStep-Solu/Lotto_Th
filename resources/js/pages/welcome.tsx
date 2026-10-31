@@ -9,6 +9,7 @@ import SgLotteryResult from '@/components/SgLotteryResult';
 import SgNumberChecker from '@/components/SgNumberChecker';
 import AppearanceToggleTab from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
+import { fetchJson } from '@/lib/fetchJson';
 import { Head, Link } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 
@@ -24,37 +25,53 @@ export default function Welcome({ auth }: { auth: { user: any } }) {
     const [lotto, setLotto] = useState<any>(null);
     const [sgLotto, setSgLotto] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (tab === 'thai') {
-            setLoading(true);
-            fetch('/api/lotto/latest')
-                .then((res) => res.json())
-                .then((data) => {
-                    setLotto(data);
-                    setLoading(false);
-                });
-        } else {
-            setLoading(true);
-            fetch('/api/lotto/sg/latest')
-                .then((res) => res.json())
-                .then((data) => {
-                    setSgLotto(data);
-                    setLoading(false);
-                });
-        }
+        const controller = new AbortController();
+        const endpoint = tab === 'thai' ? '/api/lotto/latest' : '/api/lotto/sg/latest';
+
+        setLoading(true);
+        setError(null);
+
+        fetch(endpoint, { signal: controller.signal, headers: { Accept: 'application/json' } })
+            .then((res) => {
+                if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
+                const contentType = res.headers.get('content-type') ?? '';
+                if (!contentType.includes('application/json')) {
+                    throw new Error('Unexpected non-JSON response');
+                }
+                return res.json();
+            })
+            .then((data) => {
+                if (tab === 'thai') setLotto(data);
+                else setSgLotto(data);
+            })
+            .catch((err: Error) => {
+                if (err.name === 'AbortError') return;
+                if (tab === 'thai') setLotto(null);
+                else setSgLotto(null);
+                setError('Unable to load lottery results. Please try again in a moment.');
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) setLoading(false);
+            });
+
+        return () => controller.abort();
     }, [tab]);
 
     const handleSelectDate = (id: string) => {
-        fetch(`/api/lotto/lotto/${id}`)
-            .then((res) => res.json())
-            .then((data) => setLotto(data));
+        setError(null);
+        fetchJson(`/api/lotto/lotto/${id}`)
+            .then((data) => setLotto(data))
+            .catch(() => setError('Unable to load results for that draw. Please try again.'));
     };
 
     const handleSgSelectDate = (id: string) => {
-        fetch(`/api/lotto/sg/lotto/${id}`)
-            .then((res) => res.json())
-            .then((data) => setSgLotto(data));
+        setError(null);
+        fetchJson(`/api/lotto/sg/lotto/${id}`)
+            .then((data) => setSgLotto(data))
+            .catch(() => setError('Unable to load results for that draw. Please try again.'));
     };
 
     return (
@@ -179,6 +196,13 @@ export default function Welcome({ auth }: { auth: { user: any } }) {
                                 {loading ? (
                                     <div className="rounded-2xl border border-white/30 bg-white/40 p-4 shadow-lg shadow-black/[0.02] backdrop-blur-2xl supports-[backdrop-filter]:bg-white/30 dark:border-white/[0.06] dark:bg-white/[0.03] sm:p-6">
                                         <LottoResultSkeleton />
+                                    </div>
+                                ) : error ? (
+                                    <div className="rounded-2xl border border-white/30 bg-white/40 p-10 text-center shadow-lg shadow-black/[0.02] backdrop-blur-2xl supports-[backdrop-filter]:bg-white/30 dark:border-white/[0.06] dark:bg-white/[0.03]">
+                                        <p className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">
+                                            Couldn't load results
+                                        </p>
+                                        <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{error}</p>
                                     </div>
                                 ) : tab === 'thai' ? (
                                     <LotteryResult data={lotto} />

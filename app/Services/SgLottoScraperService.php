@@ -4,6 +4,7 @@ namespace App\Services;
 
 use DOMDocument;
 use DOMXPath;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 class SgLottoScraperService
@@ -14,6 +15,9 @@ class SgLottoScraperService
     public function getLatest(): array
     {
         $html = $this->fetchHtml(self::YELU_SWEEP_URL);
+        if ($html === null) {
+            return $this->buildEmptyResponse();
+        }
         return $this->parseResult($html);
     }
 
@@ -21,24 +25,49 @@ class SgLottoScraperService
     {
         $url = self::YELU_DRAW_URL . 'singapore-sweep-' . $dateSlug;
         $html = $this->fetchHtml($url);
+        if ($html === null) {
+            return $this->buildEmptyResponse();
+        }
         return $this->parseResult($html);
     }
 
     public function getAvailableDates(): array
     {
         $html = $this->fetchHtml(self::YELU_SWEEP_URL);
+        if ($html === null) {
+            return [];
+        }
         return $this->parseHistoryTable($html);
     }
 
-    private function fetchHtml(string $url): string
+    private function fetchHtml(string $url): ?string
     {
-        $response = Http::withHeaders([
-            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language' => 'en-SG,en;q=0.9',
-        ])->timeout(15)->get($url);
+        $attempts = 2;
 
-        return $response->body();
+        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+            try {
+                $response = Http::withHeaders([
+                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language' => 'en-SG,en;q=0.9',
+                ])
+                    ->withOptions(['version' => '1.1'])
+                    ->timeout(15)
+                    ->get($url);
+
+                if ($response->successful()) {
+                    return $response->body();
+                }
+            } catch (ConnectionException $e) {
+                if ($attempt === $attempts) {
+                    report($e);
+                }
+            }
+
+            usleep(300000);
+        }
+
+        return null;
     }
 
     private function parseResult(string $html): array

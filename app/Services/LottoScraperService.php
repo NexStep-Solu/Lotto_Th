@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 class LottoScraperService
@@ -23,6 +24,9 @@ class LottoScraperService
     {
         $url = self::SANOOK_CHECK_URL . $dateId . '/';
         $html = $this->fetchHtml($url);
+        if ($html === null) {
+            return $this->buildEmptyResponse();
+        }
         $jsonLd = $this->extractNewsArticleJsonLd($html);
         if (!$jsonLd || empty($jsonLd['articleBody'])) {
             return $this->buildEmptyResponse();
@@ -33,6 +37,9 @@ class LottoScraperService
     public function getAvailableDates(): array
     {
         $html = $this->fetchHtml(self::SANOOK_LOTTO_URL);
+        if ($html === null) {
+            return [];
+        }
         $dates = [];
 
         $newsDate = $this->getDateFromNewsArticle($html);
@@ -78,6 +85,10 @@ class LottoScraperService
         }
 
         $id = $this->dateIdFromThaiDate($date);
+        if ($id === '') {
+            return null;
+        }
+
         return [
             'id' => $id,
             'date' => $date,
@@ -88,6 +99,9 @@ class LottoScraperService
     private function fallbackLatest(): array
     {
         $html = $this->fetchHtml(self::SANOOK_LOTTO_URL);
+        if ($html === null) {
+            return $this->buildEmptyResponse();
+        }
         $jsonLd = $this->extractNewsArticleJsonLd($html);
         if (!$jsonLd || empty($jsonLd['articleBody'])) {
             return $this->buildEmptyResponse();
@@ -97,15 +111,35 @@ class LottoScraperService
         return $this->parseArticleBody($jsonLd['articleBody'], $dateId);
     }
 
-    private function fetchHtml(string $url): string
+    private function fetchHtml(string $url): ?string
     {
-        $response = Http::withHeaders([
-            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language' => 'th-TH,th;q=0.9,en;q=0.8',
-        ])->timeout(15)->get($url);
+        $attempts = 2;
 
-        return $response->body();
+        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+            try {
+                $response = Http::withHeaders([
+                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language' => 'th-TH,th;q=0.9,en;q=0.8',
+                ])
+                    // Sanook drops HTTP/2 streams intermittently (cURL error 56).
+                    ->withOptions(['version' => '1.1'])
+                    ->timeout(15)
+                    ->get($url);
+
+                if ($response->successful()) {
+                    return $response->body();
+                }
+            } catch (ConnectionException $e) {
+                if ($attempt === $attempts) {
+                    report($e);
+                }
+            }
+
+            usleep(300000);
+        }
+
+        return null;
     }
 
     private function extractNewsArticleJsonLd(string $html): ?array

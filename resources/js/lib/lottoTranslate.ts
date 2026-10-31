@@ -46,6 +46,10 @@ export function convertThaiDate(date: string) {
     const month = months[parts[1]]
     const year = Number(parts[2]) - 543
 
+    if (!day || !month || Number.isNaN(year)) {
+        return date
+    }
+
     return `${day} ${month} ${year}`
 }
 

@@ -1,28 +1,87 @@
+import ImageNumberScanner from '@/components/ImageNumberScanner';
 import LotteryDatePicker from '@/components/LotteryDatePicker';
 import SgLotteryDatePicker from '@/components/SgLotteryDatePicker';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Pagination,
+    PaginationContent,
+    PaginationItem,
+} from '@/components/ui/pagination';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
-import { translateLottoName, sgPrizeNames } from '@/lib/lottoTranslate';
+import { fetchJson } from '@/lib/fetchJson';
+import { normalizeImportedNumber, parseNumberList } from '@/lib/extractNumbers';
+import { convertThaiDate, sgPrizeNames, translateLottoName } from '@/lib/lottoTranslate';
+import { cn } from '@/lib/utils';
 import { Head } from '@inertiajs/react';
-import { Info, Printer } from 'lucide-react';
-import { useRef, useState } from 'react';
-import * as XLSX from 'xlsx';
 import * as domtoimage from 'dom-to-image-more';
+import {
+    AlertCircle,
+    CalendarDays,
+    CheckCircle2,
+    ChevronLeft,
+    ChevronRight,
+    ClipboardPaste,
+    Coins,
+    FileSpreadsheet,
+    Globe2,
+    ImageUp,
+    Info,
+    Landmark,
+    ListChecks,
+    Loader2,
+    Printer,
+    ScanLine,
+    Sparkles,
+    Ticket,
+    Trophy,
+} from 'lucide-react';
+import { useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 
 type LottoTab = 'thai' | 'singapore';
+type InputMode = 'paste' | 'excel' | 'image';
+type ResultFilter = 'all' | 'winners';
 
-function checkThaiNumber(num: string, lotto: any) {
-    const prizes = lotto.response.prizes;
-    const running = lotto.response.runningNumbers;
+type LottoPrize = {
+    id: string;
+    name: string;
+    number: string[];
+    reward: number;
+};
 
-    for (const p of prizes) {
-        if (p.number.includes(num)) {
-            return { prize: p.name, reward: p.reward, status: 'WIN' };
+type LottoData = {
+    response: {
+        date?: string;
+        prizes?: LottoPrize[];
+        runningNumbers?: LottoPrize[];
+        twoDLuck?: string[];
+    };
+};
+
+type CheckStatus = 'WIN' | 'RUNNING' | 'LOSE';
+
+type PrizeCheck = {
+    prize: string | null;
+    reward: number;
+    status: CheckStatus;
+};
+
+type CheckResult = PrizeCheck & {
+    number: string;
+};
+
+function checkThaiNumber(num: string, lotto: LottoData): PrizeCheck {
+    const prizes = lotto.response.prizes ?? [];
+    const running = lotto.response.runningNumbers ?? [];
+
+    for (const prize of prizes) {
+        if (prize.number?.includes(num)) {
+            return { prize: prize.name, reward: prize.reward, status: 'WIN' };
         }
     }
 
@@ -30,28 +89,28 @@ function checkThaiNumber(num: string, lotto: any) {
     const last3 = num.slice(-3);
     const last2 = num.slice(-2);
 
-    for (const r of running) {
-        if (r.id === 'runningNumberFrontThree' && r.number.includes(first3)) {
-            return { prize: r.name, reward: r.reward, status: 'RUNNING' };
+    for (const number of running) {
+        if (number.id === 'runningNumberFrontThree' && number.number?.includes(first3)) {
+            return { prize: number.name, reward: number.reward, status: 'RUNNING' };
         }
-        if (r.id === 'runningNumberBackThree' && r.number.includes(last3)) {
-            return { prize: r.name, reward: r.reward, status: 'RUNNING' };
+        if (number.id === 'runningNumberBackThree' && number.number?.includes(last3)) {
+            return { prize: number.name, reward: number.reward, status: 'RUNNING' };
         }
-        if (r.id === 'runningNumberBackTwo' && r.number.includes(last2)) {
-            return { prize: r.name, reward: r.reward, status: 'RUNNING' };
+        if (number.id === 'runningNumberBackTwo' && number.number?.includes(last2)) {
+            return { prize: number.name, reward: number.reward, status: 'RUNNING' };
         }
     }
 
     return { prize: null, reward: 0, status: 'LOSE' };
 }
 
-function checkSgNumber(num: string, lotto: any) {
-    const prizes = lotto.response.prizes;
-    const twoDLuck = lotto.response.twoDLuck || [];
+function checkSgNumber(num: string, lotto: LottoData): PrizeCheck {
+    const prizes = lotto.response.prizes ?? [];
+    const twoDLuck = lotto.response.twoDLuck ?? [];
 
-    for (const p of prizes) {
-        if (p.number.includes(num)) {
-            return { prize: sgPrizeNames[p.id] ?? p.name, reward: p.reward, status: 'WIN' };
+    for (const prize of prizes) {
+        if (prize.number?.includes(num)) {
+            return { prize: sgPrizeNames[prize.id] ?? prize.name, reward: prize.reward, status: 'WIN' };
         }
     }
 
@@ -65,366 +124,766 @@ function checkSgNumber(num: string, lotto: any) {
     return { prize: null, reward: 0, status: 'LOSE' };
 }
 
+function StatusBadge({ status }: { status: CheckStatus }) {
+    if (status === 'WIN') {
+        return (
+            <Badge className="border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                <Trophy className="h-3 w-3" />
+                Big win
+            </Badge>
+        );
+    }
+
+    if (status === 'RUNNING') {
+        return (
+            <Badge className="border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                <Sparkles className="h-3 w-3" />
+                Won
+            </Badge>
+        );
+    }
+
+    return (
+        <Badge variant="outline" className="text-muted-foreground">
+            No prize
+        </Badge>
+    );
+}
+
 const ITEMS_PER_PAGE = 20;
+
+const INPUT_METHODS: { id: InputMode; label: string; icon: typeof ClipboardPaste }[] = [
+    { id: 'paste', label: 'Paste', icon: ClipboardPaste },
+    { id: 'excel', label: 'Excel / CSV', icon: FileSpreadsheet },
+    { id: 'image', label: 'Images', icon: ImageUp },
+];
 
 export default function Dashboard() {
     const [tab, setTab] = useState<LottoTab>('thai');
+    const [inputMode, setInputMode] = useState<InputMode>('paste');
     const [numbers, setNumbers] = useState('');
-    const [lotto, setLotto] = useState<any>(null);
-    const [sgLotto, setSgLotto] = useState<any>(null);
-    const [results, setResults] = useState<any[]>([]);
-    const [resultsPage, setResultsPage] = useState(1);
-    const [winnersPage, setWinnersPage] = useState(1);
+    const [lotto, setLotto] = useState<LottoData | null>(null);
+    const [sgLotto, setSgLotto] = useState<LottoData | null>(null);
+    const [lottoLoading, setLottoLoading] = useState(false);
+    const [results, setResults] = useState<CheckResult[]>([]);
+    const [resultFilter, setResultFilter] = useState<ResultFilter>('all');
+    const [page, setPage] = useState(1);
+    const [excelDragging, setExcelDragging] = useState(false);
     const printRef = useRef<HTMLDivElement>(null);
 
-    const handlePrintImage = async () => {
-        if (!printRef.current || results.length === 0) return;
-        const imgData = await domtoimage.toPng(printRef.current, {
-            bgColor: '#ffffff',
-            scale: 2,
-            style: {
-                'font-family': 'sans-serif',
-            },
-        });
-        const win = window.open('');
-        if (win) {
-            win.document.write(
-                `<html><head><title>Lottery Results</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh"><img src="${imgData}" style="max-width:100%;height:auto" onload="window.print();window.close()" /></body></html>`
-            );
-            win.document.close();
-        }
-    };
-
+    const digitLength = tab === 'thai' ? 6 : 7;
+    const currency = tab === 'thai' ? 'THB' : 'SGD';
     const currentLotto = tab === 'thai' ? lotto : sgLotto;
 
-    const handleCheck = () => {
-        if (!currentLotto) return;
+    const parsedNumbers = useMemo(() => parseNumberList(numbers, digitLength), [numbers, digitLength]);
+    const validCount = parsedNumbers.numbers.length;
 
-        const list = numbers
-            .split('\n')
-            .map((n) => n.trim())
-            .filter((n) => n.length > 0);
+    const winnerResults = results.filter((result) => result.status !== 'LOSE');
+    const totalReward = results.reduce((sum, result) => sum + (Number(result.reward) || 0), 0);
+    const filteredResults = resultFilter === 'winners' ? winnerResults : results;
+    const totalPages = Math.max(1, Math.ceil(filteredResults.length / ITEMS_PER_PAGE));
+    const currentPage = Math.min(page, totalPages);
+    const paginatedResults = filteredResults.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-        const result = list.map((num) => {
-            const res = tab === 'thai' ? checkThaiNumber(num, currentLotto) : checkSgNumber(num, currentLotto);
-            return { number: num, ...res };
-        });
-
-        setResults(result);
-        setResultsPage(1);
-        setWinnersPage(1);
-    };
-
-    const handleSelectDate = (id: string) => {
-        fetch(`/api/lotto/lotto/${id}`)
-            .then((res) => res.json())
-            .then((data) => setLotto(data));
-    };
-
-    const handleSgSelectDate = (id: string) => {
-        fetch(`/api/lotto/sg/lotto/${id}`)
-            .then((res) => res.json())
-            .then((data) => setSgLotto(data));
-    };
-
-    const totalWin = results.filter((r) => r.status !== 'LOSE').length;
-    const totalReward = results.reduce((sum, r) => sum + (Number(r.reward) || 0), 0);
-
-    const handleFileUpload = (e: any) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-
-        reader.onload = (evt: any) => {
-            const data = new Uint8Array(evt.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-
-            const sheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[sheetName];
-
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-            const numbers = jsonData
-                .flat()
-                .map((n: any) => String(n).trim())
-                .filter((n: string) => n.length > 0);
-
-            setNumbers(numbers.join('\n'));
-        };
-
-        reader.readAsArrayBuffer(file);
-    };
-
-    const totalWON = results.filter((r) => r.status !== 'LOSE');
-    const winnersStart = (winnersPage - 1) * ITEMS_PER_PAGE;
-    const winnersEnd = winnersStart + ITEMS_PER_PAGE;
-    const paginatedWinners = totalWON.slice(winnersStart, winnersEnd);
-    const winnersTotalPages = Math.ceil(totalWON.length / ITEMS_PER_PAGE);
-
-    const resultsStart = (resultsPage - 1) * ITEMS_PER_PAGE;
-    const resultsEnd = resultsStart + ITEMS_PER_PAGE;
-    const paginatedResults = results.slice(resultsStart, resultsEnd);
-    const resultsTotalPages = Math.ceil(results.length / ITEMS_PER_PAGE);
+    const drawDate = currentLotto?.response?.date;
+    const drawDateLabel = drawDate
+        ? tab === 'thai'
+            ? convertThaiDate(drawDate)
+            : drawDate
+        : lottoLoading
+          ? 'Loading draw results…'
+          : 'No draw selected';
 
     const translateName = (name: string) => {
         if (tab === 'thai') return translateLottoName(name) ?? '-';
         return name ?? '-';
     };
 
+    const runCheck = (list: string[]) => {
+        if (!currentLotto) {
+            toast.error('Draw results are still loading. Please try again in a moment.');
+            return;
+        }
+
+        if (list.length === 0) {
+            toast.error(`Add at least one ${digitLength}-digit number.`);
+            return;
+        }
+
+        const checked = list.map((number) => ({
+            number,
+            ...(tab === 'thai' ? checkThaiNumber(number, currentLotto) : checkSgNumber(number, currentLotto)),
+        }));
+
+        setResults(checked);
+        setResultFilter('all');
+        setPage(1);
+
+        const winners = checked.filter((result) => result.status !== 'LOSE').length;
+        if (winners > 0) {
+            toast.success(`${winners} winning number${winners === 1 ? '' : 's'} found.`);
+        } else {
+            toast.info('No winning numbers this time.');
+        }
+    };
+
+    const handleCheck = () => {
+        if (parsedNumbers.skipped > 0) {
+            toast.warning(
+                `${parsedNumbers.skipped} entr${parsedNumbers.skipped === 1 ? 'y was' : 'ies were'} ignored — use ${digitLength}-digit numbers.`,
+            );
+        }
+        runCheck(parsedNumbers.numbers);
+    };
+
+    const handleSelectDate = async (id: string) => {
+        setLottoLoading(true);
+        setResults([]);
+        try {
+            setLotto(await fetchJson<LottoData>(`/api/lotto/lotto/${id}`));
+        } catch {
+            toast.error('Could not load that Thai draw. Please try another date.');
+        } finally {
+            setLottoLoading(false);
+        }
+    };
+
+    const handleSgSelectDate = async (id: string) => {
+        setLottoLoading(true);
+        setResults([]);
+        try {
+            setSgLotto(await fetchJson<LottoData>(`/api/lotto/sg/lotto/${id}`));
+        } catch {
+            toast.error('Could not load that Singapore draw. Please try another date.');
+        } finally {
+            setLottoLoading(false);
+        }
+    };
+
+    const handleScannedNumbers = (scanned: string[]) => {
+        const existing = parseNumberList(numbers, digitLength).numbers;
+        const merged = Array.from(new Set([...existing, ...scanned]));
+
+        setNumbers(merged.join('\n'));
+        runCheck(merged);
+    };
+
+    const handleExcelFiles = async (files: File[]) => {
+        if (files.length === 0) return;
+
+        const collected: string[] = [];
+        let skippedCells = 0;
+
+        for (const file of files) {
+            try {
+                const buffer = await file.arrayBuffer();
+                const workbook = XLSX.read(buffer, { type: 'array' });
+
+                for (const sheetName of workbook.SheetNames) {
+                    const sheet = workbook.Sheets[sheetName];
+                    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+                        header: 1,
+                        raw: false,
+                        defval: '',
+                    });
+
+                    for (const row of rows) {
+                        for (const cell of row) {
+                            const normalized = normalizeImportedNumber(cell, digitLength);
+                            if (normalized) {
+                                collected.push(normalized);
+                            } else if (String(cell ?? '').trim() !== '') {
+                                skippedCells++;
+                            }
+                        }
+                    }
+                }
+            } catch {
+                toast.error(`${file.name} could not be read as a spreadsheet.`);
+            }
+        }
+
+        const unique = Array.from(new Set(collected));
+
+        if (unique.length === 0) {
+            toast.error(`No ${digitLength}-digit numbers were found in those files.`);
+            return;
+        }
+
+        const existing = parseNumberList(numbers, digitLength).numbers;
+        const merged = Array.from(new Set([...existing, ...unique]));
+        setNumbers(merged.join('\n'));
+
+        toast.success(
+            `Imported ${unique.length} number${unique.length === 1 ? '' : 's'} from ${files.length} file${files.length === 1 ? '' : 's'}.`,
+        );
+
+        if (skippedCells > 0) {
+            toast.info(`${skippedCells} other cell${skippedCells === 1 ? '' : 's'} did not look like ${digitLength}-digit numbers.`);
+        }
+    };
+
+    const handleExcelInput = (event: ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(event.target.files ?? []);
+        event.target.value = '';
+        void handleExcelFiles(files);
+    };
+
+    const handleExcelDrop = (event: DragEvent<HTMLLabelElement>) => {
+        event.preventDefault();
+        setExcelDragging(false);
+        void handleExcelFiles(Array.from(event.dataTransfer.files));
+    };
+
+    const handlePrintImage = async () => {
+        if (!printRef.current || results.length === 0) return;
+
+        const imgData = await domtoimage.toPng(printRef.current, {
+            bgcolor: '#ffffff',
+            scale: 2,
+            style: { 'font-family': 'sans-serif' },
+        });
+
+        const win = window.open('');
+        if (win) {
+            win.document.write(
+                `<html><head><title>Lottery Results</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh"><img src="${imgData}" style="max-width:100%;height:auto" onload="window.print();window.close()" /></body></html>`,
+            );
+            win.document.close();
+        }
+    };
+
+    const changeTab = (nextTab: LottoTab) => {
+        setTab(nextTab);
+        setResults([]);
+        setResultFilter('all');
+        setPage(1);
+        setInputMode('paste');
+    };
+
     return (
-        <AppLayout
-            breadcrumbs={[
-                { title: 'Dashboard', href: '/dashboard' },
-            ]}
-        >
+        <AppLayout breadcrumbs={[{ title: 'Dashboard', href: '/dashboard' }, { title: 'Lottery Checker', href: '/dashboard' }]}>
             <Head title="Lottery Checker" />
-            <div className="mx-4 mt-4">
-                <div className="flex gap-1 mb-4 border-b">
-                    <button
-                        onClick={() => { setTab('thai'); setResults([]); }}
-                        className={`px-4 py-2 text-sm font-medium transition ${
-                            tab === 'thai'
-                                ? 'border-b-2 border-primary text-foreground'
-                                : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                    >
-                        Thai Lotto
-                    </button>
-                    <button
-                        onClick={() => { setTab('singapore'); setResults([]); }}
-                        className={`px-4 py-2 text-sm font-medium transition ${
-                            tab === 'singapore'
-                                ? 'border-b-2 border-primary text-foreground'
-                                : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                    >
-                        Singapore Sweep
-                    </button>
-                </div>
 
-                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                    <div>
-                        {tab === 'thai' ? (
-                            <LotteryDatePicker onSelect={handleSelectDate} />
-                        ) : (
-                            <SgLotteryDatePicker onSelect={handleSgSelectDate} />
-                        )}
-
-                        <Card className="my-4">
-                            <CardHeader>
-                                <div className="flex items-center justify-between">
-                                    <CardTitle className="flex items-center gap-2">
-                                        Paste Numbers
-                                        <span className="text-muted-foreground text-sm">("Enter numbers, one per line")</span>
-                                        <Popover>
-                                            <PopoverTrigger asChild>
-                                                <Button variant="outline" size="icon">
-                                                    <Info className="h-4 w-4" />
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-72">
-                                                <h4 className="mb-2 font-semibold">Import Template</h4>
-                                                <p className="text-muted-foreground mb-2 text-sm">
-                                                    {tab === 'thai'
-                                                        ? 'Enter 6-digit Thai lottery numbers'
-                                                        : 'Enter 7-digit Singapore Sweep ticket numbers'}
-                                                </p>
-                                                <ul className="list-disc space-y-1 pl-5 text-sm">
-                                                    <li>One number per row</li>
-                                                    <li>Supported: .xlsx, .csv</li>
-                                                </ul>
-                                                <p className="text-muted-foreground mt-2 text-xs">Example:</p>
-                                                <pre className="rounded bg-gray-100 p-2 text-xs dark:bg-gray-800">
-                                                    {tab === 'thai' ? `123456\n654321\n111222` : `3122414\n2288613\n2086056`}
-                                                </pre>
-                                            </PopoverContent>
-                                        </Popover>
-                                    </CardTitle>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <Card className="my-2">
-                                    <CardHeader>
-                                        <CardTitle>Upload Excel</CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <input type="file" accept=".xlsx,.csv" onChange={handleFileUpload} />
-                                    </CardContent>
-                                </Card>
-                                <Textarea placeholder="Enter numbers (one per line)" value={numbers} onChange={(e) => setNumbers(e.target.value)} />
-                                <Button onClick={() => handleCheck()} disabled={!currentLotto} className="mt-2 w-full">
-                                    Check Numbers
-                                </Button>
-                            </CardContent>
-                        </Card>
+            <div className="mx-auto w-full max-w-7xl space-y-5 p-4 sm:p-6">
+                {/* Page header */}
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex items-start gap-4">
+                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/25">
+                            <Ticket className="h-7 w-7" />
+                        </div>
+                        <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Lottery Checker</h1>
+                                <Badge variant="secondary" className="rounded-full text-[10px] uppercase tracking-wider">
+                                    Admin
+                                </Badge>
+                            </div>
+                            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                                Scan ticket photos, import a spreadsheet, or paste numbers — then check everything against the
+                                selected draw.
+                            </p>
+                        </div>
                     </div>
 
-                    <div>
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Win Results</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Number</TableHead>
-                                            <TableHead>Prize</TableHead>
-                                            <TableHead>Reward</TableHead>
-                                            <TableHead>Status</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {paginatedWinners?.map((r, i) => (
-                                            <TableRow key={i}>
-                                                <TableCell>{r.number}</TableCell>
-                                                <TableCell>{translateName(r.prize)}</TableCell>
-                                                <TableCell>{Number(r.reward).toLocaleString()}</TableCell>
-                                                <TableCell>{r.status === 'WIN' ? 'BIG WIN' : r.status === 'RUNNING' ? 'WON' : ''}</TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                                {winnersTotalPages > 1 && (
-                                    <Pagination className="mt-4">
-                                        <PaginationContent className="flex-wrap justify-center">
-                                            <PaginationItem>
-                                                <PaginationPrevious
-                                                    href="#"
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        setWinnersPage((p) => Math.max(1, p - 1));
-                                                    }}
-                                                />
-                                            </PaginationItem>
-                                            {Array.from({ length: winnersTotalPages }, (_, i) => i + 1).map((page) => (
-                                                <PaginationItem key={page}>
-                                                    <PaginationLink
-                                                        href="#"
-                                                        isActive={winnersPage === page}
-                                                        onClick={(e) => {
-                                                            e.preventDefault();
-                                                            setWinnersPage(page);
-                                                        }}
-                                                    >
-                                                        {page}
-                                                    </PaginationLink>
-                                                </PaginationItem>
+                    <div className="grid w-full grid-cols-2 gap-1 rounded-xl border bg-muted/50 p-1 sm:w-auto">
+                        <button
+                            type="button"
+                            onClick={() => changeTab('thai')}
+                            className={cn(
+                                'flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all',
+                                tab === 'thai'
+                                    ? 'bg-background text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground',
+                            )}
+                        >
+                            <Landmark className="h-4 w-4" />
+                            Thai Lotto
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => changeTab('singapore')}
+                            className={cn(
+                                'flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all',
+                                tab === 'singapore'
+                                    ? 'bg-background text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground',
+                            )}
+                        >
+                            <Globe2 className="h-4 w-4" />
+                            Singapore Sweep
+                        </button>
+                    </div>
+                </div>
+
+                {/* Draw picker */}
+                <Card className="gap-0 overflow-hidden border-primary/15 bg-gradient-to-r from-primary/[0.06] via-transparent to-transparent py-0">
+                    <CardContent className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                                <CalendarDays className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                                    Selected draw
+                                </p>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <p className="text-sm font-semibold sm:text-base">{drawDateLabel}</p>
+                                    {lottoLoading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                                    {currentLotto && (
+                                        <Badge variant="outline" className="rounded-full bg-background/60 text-[10px]">
+                                            {currentLotto.response.prizes?.length ?? 0} prize rows
+                                        </Badge>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="w-full sm:max-w-xs">
+                            {tab === 'thai' ? (
+                                <LotteryDatePicker onSelect={handleSelectDate} />
+                            ) : (
+                                <SgLotteryDatePicker onSelect={handleSgSelectDate} />
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <div className="grid gap-6 xl:grid-cols-[minmax(0,430px)_minmax(0,1fr)]">
+                    {/* Input card */}
+                    <Card className="gap-0 self-start overflow-hidden">
+                        <CardHeader className="gap-4 border-b bg-muted/20 px-4 py-4 sm:px-5">
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <CardTitle className="text-base">Check numbers</CardTitle>
+                                    <CardDescription className="mt-1 text-xs">
+                                        Add tickets using whichever method is fastest for you.
+                                    </CardDescription>
+                                </div>
+                                {validCount > 0 && (
+                                    <Badge variant="secondary" className="rounded-full">
+                                        {validCount} ready
+                                    </Badge>
+                                )}
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1">
+                                {INPUT_METHODS.map((method) => {
+                                    const Icon = method.icon;
+                                    return (
+                                        <button
+                                            key={method.id}
+                                            type="button"
+                                            onClick={() => setInputMode(method.id)}
+                                            className={cn(
+                                                'flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-all',
+                                                inputMode === method.id
+                                                    ? 'bg-background text-foreground shadow-sm'
+                                                    : 'text-muted-foreground hover:text-foreground',
+                                            )}
+                                        >
+                                            <Icon className="h-4 w-4 shrink-0" />
+                                            <span className="truncate">{method.label}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </CardHeader>
+
+                        <CardContent className="space-y-4 px-4 py-4 sm:px-5">
+                            {inputMode === 'paste' && (
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <label htmlFor="lottery-numbers" className="text-xs font-medium">
+                                            Numbers, one per line
+                                        </label>
+                                        <span className="text-[11px] text-muted-foreground">{digitLength} digits each</span>
+                                    </div>
+                                    <Textarea
+                                        id="lottery-numbers"
+                                        rows={9}
+                                        value={numbers}
+                                        onChange={(event) => setNumbers(event.target.value)}
+                                        placeholder={
+                                            tab === 'thai'
+                                                ? '011781\n011780\n011782\n123456'
+                                                : '3122414\n2288613\n2086056'
+                                        }
+                                        className="min-h-[190px] resize-none font-mono text-sm tracking-wider"
+                                    />
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Tip: paste a column from Excel — spaces and commas are handled automatically.
+                                    </p>
+                                </div>
+                            )}
+
+                            {inputMode === 'excel' && (
+                                <div className="space-y-3">
+                                    <label
+                                        onDragOver={(event) => {
+                                            event.preventDefault();
+                                            setExcelDragging(true);
+                                        }}
+                                        onDragLeave={() => setExcelDragging(false)}
+                                        onDrop={handleExcelDrop}
+                                        className={cn(
+                                            'group flex cursor-pointer flex-col items-center gap-3 rounded-2xl border-2 border-dashed p-6 text-center transition-all duration-200',
+                                            excelDragging
+                                                ? 'border-primary bg-primary/5'
+                                                : 'border-border hover:border-primary/50 hover:bg-muted/40',
+                                        )}
+                                    >
+                                        <input
+                                            type="file"
+                                            accept=".xlsx,.xls,.csv"
+                                            multiple
+                                            className="hidden"
+                                            onChange={handleExcelInput}
+                                        />
+                                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 transition-transform group-hover:scale-105 dark:text-emerald-400">
+                                            <FileSpreadsheet className="h-7 w-7" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-semibold">Upload Excel or CSV</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Drop files here or click to browse
+                                            </p>
+                                        </div>
+                                        <div className="flex flex-wrap justify-center gap-1.5">
+                                            {['.xlsx', '.xls', '.csv'].map((extension) => (
+                                                <span
+                                                    key={extension}
+                                                    className="rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground"
+                                                >
+                                                    {extension}
+                                                </span>
                                             ))}
-                                            <PaginationItem>
-                                                <PaginationNext
-                                                    href="#"
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        setWinnersPage((p) => Math.min(winnersTotalPages, p + 1));
-                                                    }}
-                                                />
-                                            </PaginationItem>
-                                        </PaginationContent>
-                                    </Pagination>
+                                        </div>
+                                    </label>
+
+                                    <div className="flex items-start gap-2 rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">
+                                        <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                                        <p>
+                                            All sheets and cells are scanned. Leading zeros are restored automatically
+                                            (e.g. 11781 becomes 011781).
+                                        </p>
+                                    </div>
+
+                                    {numbers !== '' && (
+                                        <Button variant="outline" className="w-full" onClick={() => setInputMode('paste')}>
+                                            <ClipboardPaste className="h-4 w-4" />
+                                            Review imported numbers
+                                        </Button>
+                                    )}
+                                </div>
+                            )}
+
+                            {inputMode === 'image' && (
+                                <ImageNumberScanner
+                                    key={tab}
+                                    digitLength={digitLength}
+                                    disabled={!currentLotto || lottoLoading}
+                                    onUseNumbers={handleScannedNumbers}
+                                />
+                            )}
+
+                            <div className="rounded-xl border bg-muted/30 p-3">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <ListChecks className="h-4 w-4 text-primary" />
+                                        <span>
+                                            <strong className="text-foreground">{validCount}</strong>{' '}
+                                            {validCount === 1 ? 'number' : 'numbers'} ready to check
+                                        </span>
+                                    </div>
+                                    {numbers !== '' && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                                            onClick={() => setNumbers('')}
+                                        >
+                                            Clear
+                                        </Button>
+                                    )}
+                                </div>
+
+                                {parsedNumbers.skipped > 0 && (
+                                    <p className="mt-1 flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400">
+                                        <AlertCircle className="h-3 w-3" />
+                                        {parsedNumbers.skipped} entr{parsedNumbers.skipped === 1 ? 'y' : 'ies'} will be
+                                        ignored (needs {digitLength} digits).
+                                    </p>
+                                )}
+                            </div>
+
+                            <Button
+                                size="lg"
+                                onClick={handleCheck}
+                                disabled={!currentLotto || lottoLoading || validCount === 0}
+                                className="w-full shadow-md shadow-primary/20"
+                            >
+                                {lottoLoading ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <ScanLine className="h-4 w-4" />
+                                )}
+                                {lottoLoading
+                                    ? 'Loading draw results…'
+                                    : validCount > 0
+                                      ? `Check ${validCount} number${validCount === 1 ? '' : 's'}`
+                                      : 'Check numbers'}
+                            </Button>
+
+                            <div className="flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                Checked instantly in your browser
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Results column */}
+                    <div className="space-y-4">
+                        <div className="grid gap-3 sm:grid-cols-3">
+                            <Card className="gap-0 border-sky-500/20 bg-sky-500/[0.06] py-3">
+                                <CardContent className="flex items-center gap-3 px-4">
+                                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-400">
+                                        <ListChecks className="h-4 w-4" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                                            Checked
+                                        </p>
+                                        <p className="text-lg font-bold tabular-nums">{results.length}</p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="gap-0 border-emerald-500/20 bg-emerald-500/[0.06] py-3">
+                                <CardContent className="flex items-center gap-3 px-4">
+                                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                                        <Trophy className="h-4 w-4" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                                            Winners
+                                        </p>
+                                        <p className="text-lg font-bold tabular-nums">{winnerResults.length}</p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="gap-0 border-amber-500/20 bg-amber-500/[0.06] py-3">
+                                <CardContent className="flex items-center gap-3 px-4">
+                                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                                        <Coins className="h-4 w-4" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                                            Total reward
+                                        </p>
+                                        <p className="text-lg font-bold tabular-nums">
+                                            {totalReward.toLocaleString()}{' '}
+                                            <span className="text-xs font-medium text-muted-foreground">{currency}</span>
+                                        </p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        <Card className="gap-0 overflow-hidden">
+                            <CardHeader className="gap-3 border-b bg-muted/20 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                                <div>
+                                    <CardTitle className="flex items-center gap-2 text-base">
+                                        <Sparkles className="h-4 w-4 text-primary" />
+                                        Results
+                                    </CardTitle>
+                                    <CardDescription className="mt-1 text-xs">
+                                        Checked against {drawDateLabel}
+                                    </CardDescription>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <div className="inline-flex rounded-lg border bg-background p-0.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setResultFilter('all');
+                                                setPage(1);
+                                            }}
+                                            className={cn(
+                                                'rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                                                resultFilter === 'all'
+                                                    ? 'bg-muted text-foreground'
+                                                    : 'text-muted-foreground hover:text-foreground',
+                                            )}
+                                        >
+                                            All ({results.length})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setResultFilter('winners');
+                                                setPage(1);
+                                            }}
+                                            className={cn(
+                                                'rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                                                resultFilter === 'winners'
+                                                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                                                    : 'text-muted-foreground hover:text-foreground',
+                                            )}
+                                        >
+                                            Winners ({winnerResults.length})
+                                        </button>
+                                    </div>
+
+                                    {results.length > 0 && (
+                                        <Button variant="outline" size="sm" onClick={handlePrintImage}>
+                                            <Printer className="h-4 w-4" />
+                                            Print
+                                        </Button>
+                                    )}
+                                </div>
+                            </CardHeader>
+
+                            <CardContent className="px-0 pb-0">
+                                {results.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+                                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+                                            <ScanLine className="h-6 w-6" />
+                                        </div>
+                                        <p className="mt-3 text-sm font-semibold">No numbers checked yet</p>
+                                        <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+                                            Paste numbers, import a spreadsheet, or scan ticket images. Results and winners
+                                            will appear here.
+                                        </p>
+                                    </div>
+                                ) : filteredResults.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+                                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+                                            <Trophy className="h-6 w-6" />
+                                        </div>
+                                        <p className="mt-3 text-sm font-semibold">No winners in this batch</p>
+                                        <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+                                            Try the “All” filter to review every number you checked.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow className="hover:bg-transparent">
+                                                    <TableHead className="pl-4 sm:pl-5">Number</TableHead>
+                                                    <TableHead>Prize</TableHead>
+                                                    <TableHead className="text-right">Reward</TableHead>
+                                                    <TableHead className="pr-4 text-right sm:pr-5">Status</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {paginatedResults.map((result, index) => (
+                                                    <TableRow
+                                                        key={`${result.number}-${index}`}
+                                                        className={cn(result.status !== 'LOSE' && 'bg-emerald-500/[0.04]')}
+                                                    >
+                                                        <TableCell className="pl-4 font-mono text-sm font-semibold tracking-wider sm:pl-5">
+                                                            {result.number}
+                                                        </TableCell>
+                                                        <TableCell className="text-sm">
+                                                            {result.prize ? (
+                                                                translateName(result.prize)
+                                                            ) : (
+                                                                <span className="text-muted-foreground">—</span>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="text-right font-medium tabular-nums">
+                                                            {result.reward > 0
+                                                                ? `${Number(result.reward).toLocaleString()} ${currency}`
+                                                                : '—'}
+                                                        </TableCell>
+                                                        <TableCell className="pr-4 text-right sm:pr-5">
+                                                            <StatusBadge status={result.status} />
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+
+                                        {totalPages > 1 && (
+                                            <div className="flex flex-col items-center justify-between gap-3 border-t px-4 py-3 sm:flex-row sm:px-5">
+                                                <p className="text-xs text-muted-foreground">
+                                                    Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–
+                                                    {Math.min(currentPage * ITEMS_PER_PAGE, filteredResults.length)} of{' '}
+                                                    {filteredResults.length}
+                                                </p>
+                                                <Pagination className="mx-0 w-auto">
+                                                    <PaginationContent className="flex-wrap justify-center">
+                                                        <PaginationItem>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="icon"
+                                                                aria-label="Previous page"
+                                                                disabled={currentPage === 1}
+                                                                onClick={() => setPage(Math.max(1, currentPage - 1))}
+                                                                className="h-8 w-8"
+                                                            >
+                                                                <ChevronLeft className="h-4 w-4" />
+                                                            </Button>
+                                                        </PaginationItem>
+                                                        {Array.from({ length: totalPages }, (_, index) => index + 1).map(
+                                                            (pageNumber) => (
+                                                                <PaginationItem key={pageNumber}>
+                                                                    <Button
+                                                                        variant={currentPage === pageNumber ? 'default' : 'ghost'}
+                                                                        size="sm"
+                                                                        onClick={() => setPage(pageNumber)}
+                                                                        className="h-8 min-w-8 px-2"
+                                                                    >
+                                                                        {pageNumber}
+                                                                    </Button>
+                                                                </PaginationItem>
+                                                            ),
+                                                        )}
+                                                        <PaginationItem>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="icon"
+                                                                aria-label="Next page"
+                                                                disabled={currentPage === totalPages}
+                                                                onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+                                                                className="h-8 w-8"
+                                                            >
+                                                                <ChevronRight className="h-4 w-4" />
+                                                            </Button>
+                                                        </PaginationItem>
+                                                    </PaginationContent>
+                                                </Pagination>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </CardContent>
                         </Card>
                     </div>
                 </div>
 
-                {results.length > 0 && (
-                    <Card className="mt-6">
-                        <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <CardTitle>Results</CardTitle>
-                                <Button variant="outline" size="sm" onClick={handlePrintImage}>
-                                    <Printer className="h-4 w-4 mr-2" />
-                                    Print Image
-                                </Button>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="flex flex-wrap gap-4">
-                                <Card className="p-4">Total Checked: {results.length}</Card>
-                                <Card className="p-4">Winners: {totalWin}</Card>
-                                <Card className="p-4">Total Reward: {Number(totalReward).toLocaleString()} {tab === 'thai' ? 'THB' : 'SGD'}</Card>
-                            </div>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Number</TableHead>
-                                        <TableHead>Prize</TableHead>
-                                        <TableHead>Reward</TableHead>
-                                        <TableHead>Status</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {paginatedResults.map((r, i) => (
-                                        <TableRow key={i}>
-                                            <TableCell>{r.number}</TableCell>
-                                            <TableCell>{translateName(r.prize)}</TableCell>
-                                            <TableCell>{Number(r.reward).toLocaleString()}</TableCell>
-                                            <TableCell>{r.status === 'WIN' ? 'BIG WIN' : r.status === 'RUNNING' ? 'WON' : ''}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                            {resultsTotalPages > 1 && (
-                                <Pagination className="mt-4">
-                                    <PaginationContent className="flex-wrap justify-center">
-                                        <PaginationItem>
-                                            <PaginationPrevious
-                                                href="#"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    setResultsPage((p) => Math.max(1, p - 1));
-                                                }}
-                                            />
-                                        </PaginationItem>
-                                        {Array.from({ length: resultsTotalPages }, (_, i) => i + 1).map((page) => (
-                                            <PaginationItem key={page}>
-                                                <PaginationLink
-                                                    href="#"
-                                                    isActive={resultsPage === page}
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        setResultsPage(page);
-                                                    }}
-                                                >
-                                                    {page}
-                                                </PaginationLink>
-                                            </PaginationItem>
-                                        ))}
-                                        <PaginationItem>
-                                            <PaginationNext
-                                                href="#"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    setResultsPage((p) => Math.min(resultsTotalPages, p + 1));
-                                                }}
-                                            />
-                                        </PaginationItem>
-                                    </PaginationContent>
-                                </Pagination>
-                            )}
-                        </CardContent>
-                    </Card>
-                )}
-
+                {/* Hidden print layout */}
                 {results.length > 0 && (
                     <div
                         ref={printRef}
-                        className="p-6 bg-white text-black"
+                        className="bg-white p-6 text-black"
                         style={{ position: 'fixed', left: '-9999px', top: 0, width: '800px' }}
                     >
-                        <div className="text-center mb-6">
+                        <div className="mb-6 text-center">
                             <h1 className="text-2xl font-bold">Lottery Results</h1>
                             <p className="text-sm text-gray-500">
                                 {tab === 'thai' ? 'Thai Lotto' : 'Singapore Sweep'}
-                                {currentLotto?.response?.date ? ` - ${currentLotto.response.date}` : ''}
+                                {drawDate ? ` - ${drawDate}` : ''}
                             </p>
                         </div>
 
                         <div className="mb-6">
-                            <h2 className="text-lg font-semibold mb-3 border-b pb-1">Win Results</h2>
-                            <table className="w-full text-sm border-collapse border border-gray-300">
+                            <h2 className="mb-3 border-b pb-1 text-lg font-semibold">Win Results</h2>
+                            <table className="w-full border-collapse border border-gray-300 text-sm">
                                 <thead>
                                     <tr className="bg-gray-100">
                                         <th className="border border-gray-300 p-2 text-left">#</th>
@@ -435,18 +894,24 @@ export default function Dashboard() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {totalWON.map((r: any, i: number) => (
-                                        <tr key={i} className={i % 2 === 0 ? 'bg-gray-50' : ''}>
-                                            <td className="border border-gray-300 p-2">{i + 1}</td>
-                                            <td className="border border-gray-300 p-2">{r.number}</td>
-                                            <td className="border border-gray-300 p-2">{translateName(r.prize)}</td>
-                                            <td className="border border-gray-300 p-2 text-right">{Number(r.reward).toLocaleString()}</td>
-                                            <td className="border border-gray-300 p-2 text-center font-semibold">{r.status === 'WIN' ? 'BIG WIN' : 'WON'}</td>
+                                    {winnerResults.map((result, index) => (
+                                        <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : ''}>
+                                            <td className="border border-gray-300 p-2">{index + 1}</td>
+                                            <td className="border border-gray-300 p-2">{result.number}</td>
+                                            <td className="border border-gray-300 p-2">{translateName(result.prize ?? '')}</td>
+                                            <td className="border border-gray-300 p-2 text-right">
+                                                {Number(result.reward).toLocaleString()}
+                                            </td>
+                                            <td className="border border-gray-300 p-2 text-center font-semibold">
+                                                {result.status === 'WIN' ? 'BIG WIN' : 'WON'}
+                                            </td>
                                         </tr>
                                     ))}
-                                    {totalWON.length === 0 && (
+                                    {winnerResults.length === 0 && (
                                         <tr>
-                                            <td colSpan={5} className="border border-gray-300 p-4 text-center text-gray-500">No winners</td>
+                                            <td colSpan={5} className="border border-gray-300 p-4 text-center text-gray-500">
+                                                No winners
+                                            </td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -454,8 +919,8 @@ export default function Dashboard() {
                         </div>
 
                         <div>
-                            <h2 className="text-lg font-semibold mb-3 border-b pb-1">Total Results</h2>
-                            <table className="w-full text-sm border-collapse border border-gray-300">
+                            <h2 className="mb-3 border-b pb-1 text-lg font-semibold">Total Results</h2>
+                            <table className="w-full border-collapse border border-gray-300 text-sm">
                                 <thead>
                                     <tr className="bg-gray-100">
                                         <th className="border border-gray-300 p-2 text-left">Description</th>
@@ -465,16 +930,20 @@ export default function Dashboard() {
                                 <tbody>
                                     <tr className="bg-gray-50">
                                         <td className="border border-gray-300 p-2 font-medium">Total Numbers Checked</td>
-                                        <td className="border border-gray-300 p-2 text-right">{results.length.toLocaleString()}</td>
+                                        <td className="border border-gray-300 p-2 text-right">
+                                            {results.length.toLocaleString()}
+                                        </td>
                                     </tr>
                                     <tr>
                                         <td className="border border-gray-300 p-2 font-medium">Total Winners</td>
-                                        <td className="border border-gray-300 p-2 text-right text-green-700 font-semibold">{totalWin.toLocaleString()}</td>
+                                        <td className="border border-gray-300 p-2 text-right font-semibold text-green-700">
+                                            {winnerResults.length.toLocaleString()}
+                                        </td>
                                     </tr>
                                     <tr className="bg-gray-50">
                                         <td className="border border-gray-300 p-2 font-medium">Total Reward</td>
-                                        <td className="border border-gray-300 p-2 text-right text-green-700 font-semibold">
-                                            {Number(totalReward).toLocaleString()} {tab === 'thai' ? 'THB' : 'SGD'}
+                                        <td className="border border-gray-300 p-2 text-right font-semibold text-green-700">
+                                            {totalReward.toLocaleString()} {currency}
                                         </td>
                                     </tr>
                                 </tbody>
