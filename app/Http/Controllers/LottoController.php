@@ -13,21 +13,31 @@ class LottoController extends Controller
 
     public function latest(): JsonResponse
     {
-        $data = $this->lottoScraper->getLatest();
-        return response()->json($data);
+        return $this->cachedJson($this->lottoScraper->getLatest(), 300);
     }
 
     public function show(string $id): JsonResponse
     {
-        $data = $this->lottoScraper->getByDate($id);
-        return response()->json($data);
+        abort_unless(preg_match('/^\d{8}$/', $id) === 1, 404);
+
+        return $this->cachedJson($this->lottoScraper->getByDate($id), 21600);
     }
 
     public function list(): JsonResponse
     {
-        $dates = $this->lottoScraper->getAvailableDates();
-        return response()->json([
-            'response' => $dates,
-        ]);
+        return $this->cachedJson([
+            'response' => $this->lottoScraper->getAvailableDates(),
+        ], 900);
+    }
+
+    /**
+     * Lottery results are public and change at most twice a month. Let the
+     * browser and CDN reuse a response instead of re-scraping the source.
+     */
+    private function cachedJson(array $data, int $maxAge): JsonResponse
+    {
+        return response()
+            ->json($data)
+            ->header('Cache-Control', "public, max-age={$maxAge}, stale-while-revalidate=600");
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\SubscriptionPlan;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -27,6 +28,10 @@ class User extends Authenticatable
         'avatar',
         'bio',
         'branch_id',
+        'plan',
+        'plan_renews_at',
+        'usage_period_start',
+        'draw_usage',
     ];
 
     /**
@@ -49,6 +54,10 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'plan' => SubscriptionPlan::class,
+            'plan_renews_at' => 'datetime',
+            'usage_period_start' => 'datetime',
+            'draw_usage' => 'array',
         ];
     }
 

@@ -5,7 +5,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavGroup, type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { CableIcon, Coins, CoinsIcon, CreditCard, Key, LayoutGrid, LocateIcon, Settings, Shield, StoreIcon, User, User2, UserCircle, Users } from 'lucide-react';
+import { CableIcon, CircleGauge, Coins, CoinsIcon, CreditCard, Key, LayoutGrid, LocateIcon, Settings, Shield, ShieldCheck, StoreIcon, User, User2, UserCircle, Users } from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
@@ -18,6 +18,14 @@ export function AppSidebar() {
             href: '/dashboard',
             icon: LayoutGrid,
         },
+        {
+            title: 'Plan & usage',
+            href: '/settings/subscription',
+            icon: CircleGauge,
+        },
+        ...(user?.roles?.includes('admin')
+            ? [{ title: 'Plan requests', href: '/admin/plan-requests', icon: ShieldCheck }]
+            : []),
     ];
 
     const adminNavItems: NavItem[] = [

@@ -1,9 +1,11 @@
 <?php
 
 
+use App\Http\Controllers\Admin\PlanChangeRequestController as AdminPlanChangeRequestController;
 use App\Http\Controllers\Auth\SocialLoginController;
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\CashDashboardController;
+use App\Http\Controllers\DashboardUsageController;
 use App\Http\Controllers\LottoController;
 use App\Http\Controllers\SgLottoController;
 
@@ -18,15 +20,16 @@ use App\Http\Middleware\AdminOnly;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::prefix('api/lotto')->group(function () {
+Route::prefix('api/lotto')->middleware('throttle:lotto-api')->group(function () {
     Route::get('latest', [LottoController::class, 'latest']);
-    Route::get('lotto/{id}', [LottoController::class, 'show']);
+    Route::get('lotto/{id}', [LottoController::class, 'show'])->where('id', '[0-9]{8}');
     Route::get('list', [LottoController::class, 'list']);
 });
 
-Route::prefix('api/lotto/sg')->group(function () {
+Route::prefix('api/lotto/sg')->middleware('throttle:lotto-api')->group(function () {
     Route::get('latest', [SgLottoController::class, 'latest']);
-    Route::get('lotto/{id}', [SgLottoController::class, 'show']);
+    Route::get('lotto/{id}', [SgLottoController::class, 'show'])
+        ->where('id', 'singapore-sweep-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]+');
     Route::get('list', [SgLottoController::class, 'list']);
 });
 
@@ -42,6 +45,9 @@ Route::get('auth/google/callback', [SocialLoginController::class, 'handleGoogleC
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard',  [CashDashboardController::class, 'dashboard'])->name('dashboard');
+    Route::post('dashboard/usage', [DashboardUsageController::class, 'store'])
+        ->middleware('throttle:60,1')
+        ->name('dashboard.usage');
     Route::middleware([AdminOnly::class])->group(function () {
         Route::get('cash-dashboard', [CashDashboardController::class, 'index'])->name('cash.dashboard');
         Route::get('employee-dashboard', [CashDashboardController::class, 'employeeDashboard'])->name('cash.employeeDashboard');
@@ -57,6 +63,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('admin/dashboard', function () {
             return Inertia::render('Admin/Dashboard');
         })->name('admin.dashboard');
+
+        Route::get('admin/plan-requests', [AdminPlanChangeRequestController::class, 'index'])->name('admin.plan-requests.index');
+        Route::post('admin/plan-requests/{planChangeRequest}/approve', [AdminPlanChangeRequestController::class, 'approve'])->name('admin.plan-requests.approve');
+        Route::post('admin/plan-requests/{planChangeRequest}/reject', [AdminPlanChangeRequestController::class, 'reject'])->name('admin.plan-requests.reject');
     });
 });
 

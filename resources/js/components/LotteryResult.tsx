@@ -1,219 +1,134 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { convertThaiDate, prizeTranslate, runningTranslate } from "@/lib/lottoTranslate"
-import { useState } from "react"
+import { DigitTiles, NumberChips } from '@/components/lottery/DigitTiles';
+import PrizeLedger, { type PrizeEntry } from '@/components/lottery/PrizeLedger';
+import { type LotteryPayload } from '@/components/lottery/TicketChecker';
+import { convertThaiDate, prizeTranslate, runningTranslate } from '@/lib/lottoTranslate';
+import { cn } from '@/lib/utils';
 
-type LotteryPrize = {
-    id: string
-    name: string
-    number: string[]
-    reward: number
+function EmptyDraw() {
+    return (
+        <section className="rounded-2xl border border-dashed border-[#17251c]/15 bg-[#fbf9f2]/55 px-6 py-14 text-center backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.02]">
+            <p className="eyebrow text-[#0c5c43] dark:text-[#8be0c4]">Awaiting results</p>
+            <h2 className="font-display mt-3 text-3xl tracking-tight sm:text-4xl">No draw published yet</h2>
+            <p className="text-muted-foreground mx-auto mt-3 max-w-sm text-sm leading-relaxed">
+                This draw has not been published by the source yet. Pick an earlier draw from the archive, or check back after the results are
+                announced.
+            </p>
+        </section>
+    );
 }
 
-type LotteryResultData = {
-    response?: {
-        date?: string
-        prizes?: LotteryPrize[]
-        runningNumbers?: LotteryPrize[]
+export default function LotteryResult({ data }: { data?: LotteryPayload | null }) {
+    const prizes = data?.response?.prizes ?? [];
+    const running = data?.response?.runningNumbers ?? [];
+    const date = data?.response?.date;
+
+    if (!data?.response || (prizes.length === 0 && running.length === 0)) {
+        return <EmptyDraw />;
     }
-}
 
-export default function LotteryResult({ data }: { data?: LotteryResultData }) {
-    const [expanded, setExpanded] = useState<Record<string, boolean>>({})
-
-    const prizes = data?.response?.prizes ?? []
-    const running = data?.response?.runningNumbers ?? []
-    const date = data?.response?.date
-
-    const firstPrize = prizes.find((p) => p.id === "prizeFirst")
-    const nearFirst = prizes.find((p) => p.id === "prizeFirstNear")
-    const otherPrizes = prizes.filter(
-        (p) => !["prizeFirst", "prizeFirstNear"].includes(p.id)
-    )
-
-    if (!data?.response) return null
+    const firstPrize = prizes.find((prize) => prize.id === 'prizeFirst');
+    const nearFirst = prizes.find((prize) => prize.id === 'prizeFirstNear');
+    const otherPrizes = prizes.filter((prize) => !['prizeFirst', 'prizeFirstNear'].includes(prize.id));
+    const prizeTotal = prizes.reduce((sum, prize) => sum + (prize.number?.length ?? 0), 0);
 
     return (
-        <div className="mx-auto max-w-5xl space-y-6 px-4">
-            {/* DATE HEADER */}
-            <Card className="border-t-4 border-primary">
-                <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between gap-3">
+        <div className="space-y-5 sm:space-y-6">
+            <header className="flex flex-col gap-5 border-b border-[#17251c]/10 pb-5 sm:flex-row sm:items-end sm:justify-between dark:border-white/[0.08]">
+                <div>
+                    <div className="flex items-center gap-2.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#0c5c43] dark:bg-[#3cbf96]" />
+                        <p className="eyebrow text-[#0c5c43] dark:text-[#8be0c4]">Thai government lottery</p>
+                    </div>
+                    <h2 className="font-display mt-2.5 text-[2rem] leading-[0.95] tracking-tight sm:text-[2.75rem]">
+                        Draw of {date ? convertThaiDate(date) : 'an unlisted date'}
+                    </h2>
+                    <p className="text-muted-foreground mt-2 max-w-lg text-xs leading-relaxed">
+                        First prize, neighbouring numbers, running prizes and every published tier — all on one sheet.
+                    </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#0c5c43]/20 bg-[#0c5c43]/[0.06] px-2.5 py-1 text-[10px] font-semibold tracking-[0.12em] text-[#0c5c43] uppercase dark:border-[#8be0c4]/20 dark:bg-[#8be0c4]/10 dark:text-[#8be0c4]">
+                        Official summary
+                    </span>
+                    <span className="font-ticket text-muted-foreground text-[10px] tabular-nums">
+                        {prizes.length} tiers · {prizeTotal} numbers
+                    </span>
+                </div>
+            </header>
+
+            {firstPrize && (
+                <section
+                    className={cn(
+                        'ticket-surface relative overflow-hidden rounded-2xl border border-[#17251c]/10 p-5 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_24px_60px_-46px_rgba(18,32,25,0.6)] sm:p-7',
+                        'dark:border-white/[0.09] dark:shadow-[0_1px_0_rgba(255,255,255,0.05)_inset,0_24px_60px_-46px_rgba(0,0,0,0.9)]',
+                    )}
+                >
+                    <div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute -top-20 -right-16 h-56 w-56 rounded-full bg-[#0c5c43]/[0.08] blur-3xl dark:bg-[#3cbf96]/[0.08]"
+                    />
+
+                    <div className="relative flex flex-wrap items-start justify-between gap-4">
                         <div>
-                            <CardTitle className="text-base sm:text-lg tracking-tight">
-                                Thai Lottery Result
-                            </CardTitle>
-                            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">
-                                Official draw summary
+                            <p className="eyebrow text-[#0c5c43] dark:text-[#8be0c4]">First prize</p>
+                            <h3 className="font-display mt-2 text-3xl leading-none tracking-tight">The winning number</h3>
+                        </div>
+                        <div className="rounded-xl border border-[#17251c]/10 bg-[#fffdf7]/80 px-3.5 py-2.5 text-right dark:border-white/10 dark:bg-white/[0.06]">
+                            <p className="eyebrow text-muted-foreground text-[9px]">Prize per ticket</p>
+                            <p className="font-ticket mt-1 text-base font-medium text-[#0c5c43] tabular-nums dark:text-[#8be0c4]">
+                                {firstPrize.reward.toLocaleString()} THB
                             </p>
                         </div>
-                        <Badge
-                            variant="secondary"
-                            className="text-[11px] sm:text-xs px-2 py-1 whitespace-nowrap"
-                        >
-                            {date ? convertThaiDate(date) : "No draw date"}
-                        </Badge>
                     </div>
-                </CardHeader>
-            </Card>
 
-            <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2">
-                {/* FIRST PRIZE */}
-                {firstPrize && (
-                    <Card className="border-primary order-1">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm sm:text-base font-semibold flex items-center gap-2">
-                                <div className="w-1.5 h-5 bg-primary rounded-full" />
-                                First Prize
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="text-center pt-0">
-                            <p className="text-3xl sm:text-4xl font-bold text-primary mb-2 tracking-wide font-[var(--lottery-number-font,theme(fontFamily.mono))]">
-                                {firstPrize.number?.[0] ?? "—"}
-                            </p>
-                            <p className="text-[11px] sm:text-xs text-muted-foreground">
-                                Reward {firstPrize.reward} THB
-                            </p>
-                        </CardContent>
-                    </Card>
-                )}
+                    <div className="relative mt-7 overflow-x-auto pb-1 sm:mt-9">
+                        <DigitTiles number={firstPrize.number?.[0]} size="xl" tone="solid" className="min-w-max" />
+                    </div>
 
-                {/* NEAR FIRST */}
-                {nearFirst && (
-                    <Card className="order-2">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm sm:text-base font-semibold flex items-center gap-2">
-                                <div className="w-1.5 h-5 bg-orange-500 rounded-full" />
-                                Near First Prize
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-0">
-                            <div className="flex flex-wrap gap-2 justify-start sm:justify-center">
-                                {(nearFirst.number ?? []).map((n: string) => (
-                                    <Badge
-                                        key={n}
-                                        variant="outline"
-                                        className="text-base sm:text-lg px-3 py-1.5 font-[var(--lottery-number-font,theme(fontFamily.mono))]"
-                                    >
-                                        {n}
-                                    </Badge>
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
-            </div>
-
-            {prizes.length === 0 && (
-                <Card>
-                    <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                        No results are available for this draw yet.
-                    </CardContent>
-                </Card>
+                    <div className="relative mt-6 grid gap-4 border-t border-dashed border-[#17251c]/15 pt-5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start dark:border-white/10">
+                        <div>
+                            <p className="eyebrow text-muted-foreground">Near first</p>
+                            <p className="text-muted-foreground mt-1 text-[11px]">Off-by-one numbers</p>
+                        </div>
+                        <NumberChips numbers={nearFirst?.number} tone="outline" className="sm:justify-end" />
+                    </div>
+                </section>
             )}
 
-            {/* RUNNING NUMBERS */}
             {running.length > 0 && (
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm sm:text-base font-semibold flex items-center gap-2">
-                            <div className="w-1.5 h-5 bg-blue-500 rounded-full" />
-                            Running Numbers
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-1 grid gap-5 sm:grid-cols-3">
-                        {running.map((r) => (
-                            <div key={r.id} className="space-y-2 text-center sm:text-left">
-                                <p className="text-[11px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                                    {runningTranslate[r.name] ?? r.name}
+                <section className="overflow-hidden rounded-2xl border border-[#17251c]/10 bg-[#fbf9f2]/70 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.025]">
+                    <header className="flex items-end justify-between gap-3 border-b border-[#17251c]/10 px-5 py-4 dark:border-white/[0.07]">
+                        <div>
+                            <p className="eyebrow text-muted-foreground">Running prizes</p>
+                            <h3 className="font-display mt-1.5 text-2xl leading-none tracking-tight">The short numbers</h3>
+                        </div>
+                        <span className="font-ticket text-muted-foreground text-[10px] tabular-nums">{running.length} categories</span>
+                    </header>
+
+                    <div className="grid divide-y divide-[#17251c]/[0.07] sm:grid-cols-3 sm:divide-x sm:divide-y-0 dark:divide-white/[0.06]">
+                        {running.map((entry) => (
+                            <div key={entry.id} className="px-5 py-5">
+                                <p className="text-muted-foreground text-[11px] font-semibold tracking-[0.13em] uppercase">
+                                    {runningTranslate[entry.name] ?? entry.name}
                                 </p>
-                                <div className="flex flex-wrap justify-center sm:justify-start gap-2">
-                                    {(r.number ?? []).map((num: string) => (
-                                        <Badge
-                                            key={num}
-                                            variant="secondary"
-                                            className="text-base sm:text-lg px-3 py-1.5 font-[var(--lottery-number-font,theme(fontFamily.mono))]"
-                                        >
-                                            {num}
-                                        </Badge>
-                                    ))}
-                                </div>
+                                <p className="font-ticket text-muted-foreground/80 mt-1 text-[10px] tabular-nums">
+                                    {entry.reward.toLocaleString()} THB
+                                </p>
+                                <NumberChips numbers={entry.number} tone="accent" className="mt-3" />
                             </div>
                         ))}
-                    </CardContent>
-                </Card>
+                    </div>
+                </section>
             )}
 
-            {/* OTHER PRIZES */}
-            {otherPrizes.length > 0 && (
-                <>
-                    <Separator className="my-4 sm:my-6" />
-
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm sm:text-base font-semibold">
-                                Other Prizes
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-6 pt-1">
-                            {otherPrizes.map((p) => {
-                                const isExpanded = expanded[p.id]
-                                const limit = 10 // show 9 on mobile; grid will expand on larger screens
-                                const numbers: string[] = p.number ?? []
-                                const numbersToShow = isExpanded ? numbers : numbers.slice(0, limit)
-
-                                return (
-                                    <div key={p.id} className="space-y-3">
-                                        {/* HEADER */}
-                                        <div className="flex items-center justify-between gap-2">
-                                            <p className="font-medium text-sm sm:text-base">
-                                                {prizeTranslate[p.name] ?? p.name}
-                                            </p>
-                                            <Badge
-                                                variant="outline"
-                                                className="text-[11px] sm:text-xs px-2 py-1 whitespace-nowrap"
-                                            >
-                                                {p.reward} THB
-                                            </Badge>
-                                        </div>
-
-                                        {/* NUMBERS GRID */}
-                                        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
-                                            {numbersToShow.map((n: string) => (
-                                                <Badge
-                                                    key={n}
-                                                    variant="secondary"
-                                                    className="justify-center py-2 text-sm sm:text-base font-[var(--lottery-number-font,theme(fontFamily.mono))] h-10 sm:h-11 flex items-center"
-                                                >
-                                                    {n}
-                                                </Badge>
-                                            ))}
-                                        </div>
-
-                                        {/* TOGGLE BUTTON */}
-                                        {numbers.length > limit && (
-                                            <button
-                                                onClick={() =>
-                                                    setExpanded(prev => ({
-                                                        ...prev,
-                                                        [p.id]: !prev[p.id],
-                                                    }))
-                                                }
-                                                className="text-[11px] sm:text-xs font-medium text-primary hover:text-primary/80 hover:underline flex items-center gap-1"
-                                            >
-                                                {isExpanded
-                                                    ? "Show less"
-                                                    : `Show all (${numbers.length})`}
-                                            </button>
-                                        )}
-                                    </div>
-                                )
-                            })}
-                        </CardContent>
-                    </Card>
-                </>
-            )}
+            <PrizeLedger
+                prizes={otherPrizes}
+                nameFor={(prize: PrizeEntry) => prizeTranslate[prize.name] ?? prize.name}
+                currency="THB"
+                title="Every published tier"
+                description="Tap “Show all” on a tier to reveal its full number set."
+            />
         </div>
-    )
+    );
 }

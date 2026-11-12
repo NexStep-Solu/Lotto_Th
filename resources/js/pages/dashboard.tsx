@@ -16,14 +16,16 @@ import { fetchJson } from '@/lib/fetchJson';
 import { normalizeImportedNumber, parseNumberList } from '@/lib/extractNumbers';
 import { convertThaiDate, sgPrizeNames, translateLottoName } from '@/lib/lottoTranslate';
 import { cn } from '@/lib/utils';
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import * as domtoimage from 'dom-to-image-more';
 import {
     AlertCircle,
+    ArrowUpRight,
     CalendarDays,
     CheckCircle2,
     ChevronLeft,
     ChevronRight,
+    CircleGauge,
     ClipboardPaste,
     Coins,
     FileSpreadsheet,
@@ -74,6 +76,39 @@ type PrizeCheck = {
 type CheckResult = PrizeCheck & {
     number: string;
 };
+
+type SubscriptionSnapshot = {
+    plan: 'basic' | 'pro';
+    label: string;
+    tagline: string;
+    price: number;
+    currency: string;
+    features: string[];
+    unlimited: boolean;
+    limits: {
+        draws_per_month: number;
+        tickets_per_draw: number | null;
+        total_tickets: number;
+    };
+    usage: {
+        tickets_used: number;
+        tickets_remaining: number;
+        draws_used: number;
+        draws_remaining: number;
+        used_draws: string[];
+        renews_at: string | null;
+        period_start: string | null;
+    };
+};
+
+function formatRenewal(value: string | null): string {
+    if (!value) return 'next month';
+
+    return new Date(value).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+    });
+}
 
 function checkThaiNumber(num: string, lotto: LottoData): PrizeCheck {
     const prizes = lotto.response.prizes ?? [];
@@ -158,7 +193,7 @@ const INPUT_METHODS: { id: InputMode; label: string; icon: typeof ClipboardPaste
     { id: 'image', label: 'Images', icon: ImageUp },
 ];
 
-export default function Dashboard() {
+export default function Dashboard({ subscription: initialSubscription }: { subscription: SubscriptionSnapshot }) {
     const [tab, setTab] = useState<LottoTab>('thai');
     const [inputMode, setInputMode] = useState<InputMode>('paste');
     const [numbers, setNumbers] = useState('');
@@ -169,6 +204,8 @@ export default function Dashboard() {
     const [resultFilter, setResultFilter] = useState<ResultFilter>('all');
     const [page, setPage] = useState(1);
     const [excelDragging, setExcelDragging] = useState(false);
+    const [subscription, setSubscription] = useState<SubscriptionSnapshot>(initialSubscription);
+    const [usageRecording, setUsageRecording] = useState(false);
     const printRef = useRef<HTMLDivElement>(null);
 
     const digitLength = tab === 'thai' ? 6 : 7;
@@ -184,6 +221,14 @@ export default function Dashboard() {
     const totalPages = Math.max(1, Math.ceil(filteredResults.length / ITEMS_PER_PAGE));
     const currentPage = Math.min(page, totalPages);
     const paginatedResults = filteredResults.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+    const visiblePageNumbers = useMemo(() => {
+        if (totalPages <= 5) {
+            return Array.from({ length: totalPages }, (_, index) => index + 1);
+        }
+
+        const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+        return Array.from({ length: 5 }, (_, index) => start + index);
+    }, [currentPage, totalPages]);
 
     const drawDate = currentLotto?.response?.date;
     const drawDateLabel = drawDate
@@ -199,7 +244,47 @@ export default function Dashboard() {
         return name ?? '-';
     };
 
-    const runCheck = (list: string[]) => {
+    const recordUsage = async (drawKey: string, tickets: number): Promise<boolean> => {
+        setUsageRecording(true);
+
+        try {
+            const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+            const response = await fetch('/dashboard/usage', {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                body: JSON.stringify({ draw: drawKey, tickets }),
+            });
+
+            const payload = (await response.json().catch(() => null)) as {
+                subscription?: SubscriptionSnapshot;
+                message?: string;
+            } | null;
+
+            if (payload?.subscription) {
+                setSubscription(payload.subscription);
+            }
+
+            if (!response.ok) {
+                toast.error(payload?.message ?? 'Your plan limit was reached.', {
+                    description: 'Manage your plan in Settings → Plan & usage.',
+                });
+                return false;
+            }
+
+            return true;
+        } catch {
+            toast.warning('Usage could not be recorded, but this check can continue.');
+            return true;
+        } finally {
+            setUsageRecording(false);
+        }
+    };
+
+    const runCheck = async (list: string[]) => {
         if (!currentLotto) {
             toast.error('Draw results are still loading. Please try again in a moment.');
             return;
@@ -207,6 +292,37 @@ export default function Dashboard() {
 
         if (list.length === 0) {
             toast.error(`Add at least one ${digitLength}-digit number.`);
+            return;
+        }
+
+        const drawKey = `${tab}:${currentLotto.response.date ?? 'latest'}`;
+        const isNewDraw = !subscription.usage.used_draws.includes(drawKey);
+
+        if (!subscription.unlimited) {
+            if (isNewDraw && subscription.usage.draws_remaining <= 0) {
+                toast.error(
+                    `Your ${subscription.label} plan already used all ${subscription.limits.draws_per_month} draws this month.`,
+                    {
+                        description: 'Manage your plan in Settings → Plan & usage.',
+                    },
+                );
+                return;
+            }
+
+            if (list.length > subscription.usage.tickets_remaining) {
+                toast.error(
+                    `Your ${subscription.label} plan has ${subscription.usage.tickets_remaining.toLocaleString()} tickets left this month.`,
+                    {
+                        description: 'Reduce the list or upgrade in Settings → Plan & usage.',
+                    },
+                );
+                return;
+            }
+        }
+
+        const usageAccepted = await recordUsage(drawKey, list.length);
+
+        if (!usageAccepted) {
             return;
         }
 
@@ -228,12 +344,16 @@ export default function Dashboard() {
     };
 
     const handleCheck = () => {
+        if (usageRecording) {
+            return;
+        }
+
         if (parsedNumbers.skipped > 0) {
             toast.warning(
                 `${parsedNumbers.skipped} entr${parsedNumbers.skipped === 1 ? 'y was' : 'ies were'} ignored — use ${digitLength}-digit numbers.`,
             );
         }
-        runCheck(parsedNumbers.numbers);
+        void runCheck(parsedNumbers.numbers);
     };
 
     const handleSelectDate = async (id: string) => {
@@ -265,7 +385,7 @@ export default function Dashboard() {
         const merged = Array.from(new Set([...existing, ...scanned]));
 
         setNumbers(merged.join('\n'));
-        runCheck(merged);
+        void runCheck(merged);
     };
 
     const handleExcelFiles = async (files: File[]) => {
@@ -338,18 +458,52 @@ export default function Dashboard() {
     const handlePrintImage = async () => {
         if (!printRef.current || results.length === 0) return;
 
-        const imgData = await domtoimage.toPng(printRef.current, {
-            bgcolor: '#ffffff',
-            scale: 2,
-            style: { 'font-family': 'sans-serif' },
-        });
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            toast.error('Allow pop-ups for this site to print the results.');
+            return;
+        }
 
-        const win = window.open('');
-        if (win) {
-            win.document.write(
-                `<html><head><title>Lottery Results</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh"><img src="${imgData}" style="max-width:100%;height:auto" onload="window.print();window.close()" /></body></html>`,
+        printWindow.opener = null;
+        printWindow.document.title = 'Lottery Results';
+        printWindow.document.body.style.margin = '0';
+        printWindow.document.body.style.minHeight = '100vh';
+        printWindow.document.body.style.display = 'flex';
+        printWindow.document.body.style.alignItems = 'center';
+        printWindow.document.body.style.justifyContent = 'center';
+
+        const status = printWindow.document.createElement('p');
+        status.textContent = 'Preparing your print sheet…';
+        status.style.fontFamily = 'sans-serif';
+        status.style.fontSize = '14px';
+        status.style.color = '#555';
+        printWindow.document.body.appendChild(status);
+
+        try {
+            const blob = await domtoimage.toBlob(printRef.current, {
+                bgcolor: '#ffffff',
+                scale: 2,
+                style: { 'font-family': 'sans-serif' },
+            });
+            const imageUrl = URL.createObjectURL(blob);
+            const image = printWindow.document.createElement('img');
+            image.src = imageUrl;
+            image.alt = 'Lottery results';
+            image.style.maxWidth = '100%';
+            image.style.height = 'auto';
+            image.addEventListener(
+                'load',
+                () => {
+                    printWindow.focus();
+                    printWindow.print();
+                    window.setTimeout(() => URL.revokeObjectURL(imageUrl), 60000);
+                },
+                { once: true },
             );
-            win.document.close();
+            printWindow.document.body.replaceChildren(image);
+        } catch {
+            printWindow.close();
+            toast.error('The print sheet could not be generated. Please try again.');
         }
     };
 
@@ -365,7 +519,7 @@ export default function Dashboard() {
         <AppLayout breadcrumbs={[{ title: 'Dashboard', href: '/dashboard' }, { title: 'Lottery Checker', href: '/dashboard' }]}>
             <Head title="Lottery Checker" />
 
-            <div className="mx-auto w-full max-w-7xl space-y-5 p-4 sm:p-6">
+            <div className="mx-auto w-full space-y-5 p-4 sm:p-6">
                 {/* Page header */}
                 <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                     <div className="flex items-start gap-4">
@@ -415,6 +569,103 @@ export default function Dashboard() {
                         </button>
                     </div>
                 </div>
+
+                {/* Plan & usage */}
+                <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+                    <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.5fr)_auto] lg:items-center">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#0c5c43]/10 text-[#0c5c43] dark:bg-emerald-400/10 dark:text-emerald-300">
+                                <CircleGauge className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                    BlameVerse plan
+                                </p>
+                                <p className="truncate text-sm font-semibold">
+                                    {subscription.label}
+                                    <span className="ml-2 text-[11px] font-normal text-muted-foreground">
+                                        renews {formatRenewal(subscription.usage.renews_at)}
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+
+                        {subscription.unlimited ? (
+                            <div className="rounded-xl border border-[#0c5c43]/20 bg-[#0c5c43]/[0.06] px-4 py-3 text-sm font-semibold text-[#0c5c43] dark:text-emerald-300">
+                                Unlimited checking for administrators
+                            </div>
+                        ) : (
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <div>
+                                    <div className="flex items-center justify-between gap-2 text-[11px]">
+                                        <span className="font-medium text-muted-foreground">Tickets this month</span>
+                                        <span className="font-ticket tabular-nums">
+                                            {subscription.usage.tickets_used.toLocaleString()} /{' '}
+                                            {subscription.limits.total_tickets.toLocaleString()}
+                                        </span>
+                                    </div>
+                                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                                        <div
+                                            className={cn(
+                                                'h-full rounded-full transition-all',
+                                                subscription.usage.tickets_remaining <= 0
+                                                    ? 'bg-amber-500'
+                                                    : 'bg-[#0c5c43] dark:bg-emerald-400',
+                                            )}
+                                            style={{
+                                                width: `${Math.min(
+                                                    100,
+                                                    Math.round(
+                                                        (subscription.usage.tickets_used /
+                                                            subscription.limits.total_tickets) *
+                                                            100,
+                                                    ),
+                                                )}%`,
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div className="flex items-center justify-between gap-2 text-[11px]">
+                                        <span className="font-medium text-muted-foreground">Draws this month</span>
+                                        <span className="font-ticket tabular-nums">
+                                            {subscription.usage.draws_used} / {subscription.limits.draws_per_month}
+                                        </span>
+                                    </div>
+                                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                                        <div
+                                            className={cn(
+                                                'h-full rounded-full transition-all',
+                                                subscription.usage.draws_remaining <= 0
+                                                    ? 'bg-amber-500'
+                                                    : 'bg-[#0c5c43] dark:bg-emerald-400',
+                                            )}
+                                            style={{
+                                                width: `${Math.min(
+                                                    100,
+                                                    Math.round(
+                                                        (subscription.usage.draws_used /
+                                                            subscription.limits.draws_per_month) *
+                                                            100,
+                                                    ),
+                                                )}%`,
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <Link
+                            href={route('subscription.edit')}
+                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition hover:bg-muted lg:justify-self-end"
+                        >
+                            Manage plan
+                            <ArrowUpRight className="h-3.5 w-3.5" />
+                        </Link>
+                    </div>
+                </section>
 
                 {/* Draw picker */}
                 <Card className="gap-0 overflow-hidden border-primary/15 bg-gradient-to-r from-primary/[0.06] via-transparent to-transparent py-0">
@@ -617,22 +868,61 @@ export default function Dashboard() {
                                 )}
                             </div>
 
+                            {subscription.unlimited ? (
+                                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                    <CircleGauge className="h-3.5 w-3.5" />
+                                    Unlimited checking for administrators
+                                </div>
+                            ) : (
+                                <div
+                                    className={cn(
+                                        'flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]',
+                                        subscription.usage.tickets_remaining <= 0 ||
+                                            subscription.usage.draws_remaining <= 0 ||
+                                            validCount > subscription.usage.tickets_remaining
+                                            ? 'text-amber-600 dark:text-amber-400'
+                                            : 'text-muted-foreground',
+                                    )}
+                                >
+                                    <span className="inline-flex items-center gap-1.5">
+                                        <CircleGauge className="h-3.5 w-3.5" />
+                                        {subscription.usage.tickets_remaining.toLocaleString()} ticket
+                                        {subscription.usage.tickets_remaining === 1 ? '' : 's'} left this month
+                                    </span>
+                                    <span className="text-border hidden sm:inline">•</span>
+                                    <span>
+                                        {subscription.usage.draws_remaining} of {subscription.limits.draws_per_month}{' '}
+                                        draws left
+                                    </span>
+                                    {validCount > subscription.usage.tickets_remaining && (
+                                        <span className="basis-full">
+                                            This list is larger than the tickets left on your {subscription.label}{' '}
+                                            plan.
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+
                             <Button
                                 size="lg"
                                 onClick={handleCheck}
-                                disabled={!currentLotto || lottoLoading || validCount === 0}
+                                disabled={
+                                    !currentLotto || lottoLoading || validCount === 0 || usageRecording
+                                }
                                 className="w-full shadow-md shadow-primary/20"
                             >
-                                {lottoLoading ? (
+                                {lottoLoading || usageRecording ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
                                     <ScanLine className="h-4 w-4" />
                                 )}
                                 {lottoLoading
                                     ? 'Loading draw results…'
-                                    : validCount > 0
-                                      ? `Check ${validCount} number${validCount === 1 ? '' : 's'}`
-                                      : 'Check numbers'}
+                                    : usageRecording
+                                      ? 'Recording usage…'
+                                      : validCount > 0
+                                        ? `Check ${validCount} number${validCount === 1 ? '' : 's'}`
+                                        : 'Check numbers'}
                             </Button>
 
                             <div className="flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
@@ -829,20 +1119,19 @@ export default function Dashboard() {
                                                                 <ChevronLeft className="h-4 w-4" />
                                                             </Button>
                                                         </PaginationItem>
-                                                        {Array.from({ length: totalPages }, (_, index) => index + 1).map(
-                                                            (pageNumber) => (
-                                                                <PaginationItem key={pageNumber}>
-                                                                    <Button
-                                                                        variant={currentPage === pageNumber ? 'default' : 'ghost'}
-                                                                        size="sm"
-                                                                        onClick={() => setPage(pageNumber)}
-                                                                        className="h-8 min-w-8 px-2"
-                                                                    >
-                                                                        {pageNumber}
-                                                                    </Button>
-                                                                </PaginationItem>
-                                                            ),
-                                                        )}
+                                                        {visiblePageNumbers.map((pageNumber) => (
+                                                            <PaginationItem key={pageNumber}>
+                                                                <Button
+                                                                    variant={currentPage === pageNumber ? 'default' : 'ghost'}
+                                                                    size="sm"
+                                                                    onClick={() => setPage(pageNumber)}
+                                                                    className="h-8 min-w-8 px-2 tabular-nums"
+                                                                    aria-current={currentPage === pageNumber ? 'page' : undefined}
+                                                                >
+                                                                    {pageNumber}
+                                                                </Button>
+                                                            </PaginationItem>
+                                                        ))}
                                                         <PaginationItem>
                                                             <Button
                                                                 variant="outline"

@@ -13,21 +13,27 @@ class SgLottoController extends Controller
 
     public function latest(): JsonResponse
     {
-        $data = $this->sgLottoScraper->getLatest();
-        return response()->json($data);
+        return $this->cachedJson($this->sgLottoScraper->getLatest(), 300);
     }
 
     public function show(string $id): JsonResponse
     {
-        $data = $this->sgLottoScraper->getByDate($id);
-        return response()->json($data);
+        abort_unless(preg_match('/^singapore-sweep-\d{4}-\d{2}-\d{2}-\d+$/', $id) === 1, 404);
+
+        return $this->cachedJson($this->sgLottoScraper->getByDate($id), 21600);
     }
 
     public function list(): JsonResponse
     {
-        $dates = $this->sgLottoScraper->getAvailableDates();
-        return response()->json([
-            'response' => $dates,
-        ]);
+        return $this->cachedJson([
+            'response' => $this->sgLottoScraper->getAvailableDates(),
+        ], 900);
+    }
+
+    private function cachedJson(array $data, int $maxAge): JsonResponse
+    {
+        return response()
+            ->json($data)
+            ->header('Cache-Control', "public, max-age={$maxAge}, stale-while-revalidate=600");
     }
 }

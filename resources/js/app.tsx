@@ -9,14 +9,13 @@ import OfflinePage from './pages/OfflinePage';
 
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker
-            .register('/service-worker.js')
-            .then(() => console.log('Service Worker registered'))
-            .catch((err) => console.error('SW error', err));
+        navigator.serviceWorker.register('/service-worker.js').catch((error) => {
+            console.error('Service worker registration failed', error);
+        });
     });
 }
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const appName = import.meta.env.VITE_APP_NAME || 'Lotto Ledger';
 (function () {
     const theme = localStorage.getItem('theme') || 'default';
     const dark = localStorage.getItem('dark') === 'true';

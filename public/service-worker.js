@@ -1,20 +1,73 @@
-const CACHE_NAME = "unity-erp-cache-v1";
-const urlsToCache = [
-  "/",
-  "/index.html",
-  "/favicon.ico",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png"
+const CACHE_NAME = 'lotto-ledger-v2';
+const PRECACHE_URLS = [
+    '/offline',
+    '/favicon.ico',
+    '/icons/icon-192.png',
+    '/icons/icon-512.png',
+    '/manifest.json',
 ];
 
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
-  );
+self.addEventListener('install', (event) => {
+    event.waitUntil(
+        caches
+            .open(CACHE_NAME)
+            .then((cache) => cache.addAll(PRECACHE_URLS))
+            .then(() => self.skipWaiting()),
+    );
 });
 
-self.addEventListener("fetch", (event) => {
-  event.respondWith(
-    caches.match(event.request).then((response) => response || fetch(event.request))
-  );
+self.addEventListener('activate', (event) => {
+    event.waitUntil(
+        caches
+            .keys()
+            .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+            .then(() => self.clients.claim()),
+    );
+});
+
+self.addEventListener('fetch', (event) => {
+    const { request } = event;
+
+    if (request.method !== 'GET') {
+        return;
+    }
+
+    const url = new URL(request.url);
+
+    if (url.origin !== self.location.origin) {
+        return;
+    }
+
+    // Never cache API responses or authenticated page data.
+    if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/sanctum/')) {
+        return;
+    }
+
+    // Navigations stay network-first so a rebuild never serves stale HTML.
+    if (request.mode === 'navigate') {
+        event.respondWith(fetch(request).catch(() => caches.match('/offline')));
+        return;
+    }
+
+    // Cache-first only for static build assets.
+    if (['style', 'script', 'image', 'font'].includes(request.destination)) {
+        event.respondWith(
+            caches.match(request).then((cached) => {
+                if (cached) {
+                    return cached;
+                }
+
+                return fetch(request).then((response) => {
+                    if (!response || response.status !== 200 || response.type === 'opaque') {
+                        return response;
+                    }
+
+                    const copy = response.clone();
+                    caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+
+                    return response;
+                });
+            }),
+        );
+    }
 });

@@ -5,8 +5,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="description" content="Thai government lottery and Singapore Sweep results, with a fast in-browser ticket checker.">
+    <meta property="og:title" content="{{ config('app.name', 'Lotto Ledger') }}">
+    <meta property="og:description" content="Check Thai and Singapore lottery numbers against the latest official draw.">
+    <meta property="og:type" content="website">
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#0f172a">
+    <meta name="theme-color" content="#f3f0e7" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0b0f0d" media="(prefers-color-scheme: dark)">
 
     {{-- Inline script to detect system dark mode preference and apply it immediately --}}
     <script>
@@ -41,10 +46,9 @@
 
     <link rel="icon" href="/favicon.ico" sizes="any">
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="preconnect" href="https://fonts.bunny.net">
-    <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
+    <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700|instrument-serif:400,400i|jetbrains-mono:400,500,600" rel="stylesheet" />
 
     @routes
     @viteReactRefresh

@@ -5,39 +5,86 @@ namespace App\Services;
 use DOMDocument;
 use DOMXPath;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
 class SgLottoScraperService
 {
     private const YELU_SWEEP_URL = 'https://www.yelu.sg/lottery/results/singapore-sweep';
     private const YELU_DRAW_URL = 'https://www.yelu.sg/lottery/draw/';
+    private const CACHE_PREFIX = 'lotto:sg:';
 
     public function getLatest(): array
     {
+        $cacheKey = self::CACHE_PREFIX . 'latest';
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            return $cached;
+        }
+
         $html = $this->fetchHtml(self::YELU_SWEEP_URL);
         if ($html === null) {
             return $this->buildEmptyResponse();
         }
-        return $this->parseResult($html);
+
+        $data = $this->parseResult($html);
+
+        if (!empty($data['response']['prizes'])) {
+            Cache::put($cacheKey, $data, now()->addMinutes(5));
+        }
+
+        return $data;
     }
 
     public function getByDate(string $dateSlug): array
     {
-        $url = self::YELU_DRAW_URL . 'singapore-sweep-' . $dateSlug;
+        // Accept only the slug shape the upstream site actually publishes.
+        if (preg_match('/^singapore-sweep-\d{4}-\d{2}-\d{2}-\d+$/', $dateSlug) !== 1) {
+            return $this->buildEmptyResponse();
+        }
+
+        $cacheKey = self::CACHE_PREFIX . 'draw:' . $dateSlug;
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            return $cached;
+        }
+
+        $url = self::YELU_DRAW_URL . $dateSlug;
         $html = $this->fetchHtml($url);
         if ($html === null) {
             return $this->buildEmptyResponse();
         }
-        return $this->parseResult($html);
+
+        $data = $this->parseResult($html);
+
+        if (!empty($data['response']['prizes'])) {
+            Cache::put($cacheKey, $data, now()->addHours(6));
+        }
+
+        return $data;
     }
 
     public function getAvailableDates(): array
     {
+        $cacheKey = self::CACHE_PREFIX . 'dates';
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            return $cached;
+        }
+
         $html = $this->fetchHtml(self::YELU_SWEEP_URL);
         if ($html === null) {
             return [];
         }
-        return $this->parseHistoryTable($html);
+
+        $dates = $this->parseHistoryTable($html);
+        Cache::put(
+            $cacheKey,
+            $dates,
+            empty($dates) ? now()->addMinute() : now()->addMinutes(15),
+        );
+
+        return $dates;
     }
 
     private function fetchHtml(string $url): ?string

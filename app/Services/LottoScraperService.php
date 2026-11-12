@@ -3,25 +3,42 @@
 namespace App\Services;
 
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
 class LottoScraperService
 {
     private const SANOOK_LOTTO_URL = 'https://news.sanook.com/lotto/';
     private const SANOOK_CHECK_URL = 'https://news.sanook.com/lotto/check/';
+    private const CACHE_PREFIX = 'lotto:thai:';
 
     public function getLatest(): array
     {
-        $dates = $this->getAvailableDates();
-        if (empty($dates)) {
-            return $this->fallbackLatest();
+        $cached = Cache::get(self::CACHE_PREFIX . 'latest');
+        if (is_array($cached)) {
+            return $cached;
         }
-        $latest = $dates[0];
-        return $this->getByDate($latest['id']);
+
+        $dates = $this->getAvailableDates();
+        $data = empty($dates)
+            ? $this->fallbackLatest()
+            : $this->getByDate($dates[0]['id']);
+
+        if (!empty($data['response']['prizes'])) {
+            Cache::put(self::CACHE_PREFIX . 'latest', $data, now()->addMinutes(5));
+        }
+
+        return $data;
     }
 
     public function getByDate(string $dateId): array
     {
+        $cacheKey = self::CACHE_PREFIX . 'draw:' . $dateId;
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            return $cached;
+        }
+
         $url = self::SANOOK_CHECK_URL . $dateId . '/';
         $html = $this->fetchHtml($url);
         if ($html === null) {
@@ -31,11 +48,25 @@ class LottoScraperService
         if (!$jsonLd || empty($jsonLd['articleBody'])) {
             return $this->buildEmptyResponse();
         }
-        return $this->parseArticleBody($jsonLd['articleBody'], $dateId);
+
+        $data = $this->parseArticleBody($jsonLd['articleBody'], $dateId);
+
+        // Never cache a failed/empty scrape for hours.
+        if (!empty($data['response']['prizes'])) {
+            Cache::put($cacheKey, $data, now()->addHours(6));
+        }
+
+        return $data;
     }
 
     public function getAvailableDates(): array
     {
+        $cacheKey = self::CACHE_PREFIX . 'dates';
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            return $cached;
+        }
+
         $html = $this->fetchHtml(self::SANOOK_LOTTO_URL);
         if ($html === null) {
             return [];
@@ -67,6 +98,12 @@ class LottoScraperService
                 }
             }
         }
+
+        Cache::put(
+            $cacheKey,
+            $dates,
+            empty($dates) ? now()->addMinute() : now()->addMinutes(15),
+        );
 
         return $dates;
     }
