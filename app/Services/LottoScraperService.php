@@ -167,7 +167,7 @@ class LottoScraperService
                 if ($response->successful()) {
                     return $response->body();
                 }
-            } catch (ConnectionException $e) {
+            } catch (\Throwable $e) {
                 if ($attempt === $attempts) {
                     report($e);
                 }
