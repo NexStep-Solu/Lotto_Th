@@ -251,10 +251,12 @@ export default function Dashboard({ subscription: initialSubscription }: { subsc
             const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
             const response = await fetch('/dashboard/usage', {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: {
                     Accept: 'application/json',
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
                 },
                 body: JSON.stringify({ draw: drawKey, tickets }),
             });
@@ -268,9 +270,18 @@ export default function Dashboard({ subscription: initialSubscription }: { subsc
                 setSubscription(payload.subscription);
             }
 
+            if (response.status === 419) {
+                toast.error('Your session expired. Refreshing to get a new security token…');
+                window.setTimeout(() => window.location.reload(), 1200);
+                return false;
+            }
+
             if (!response.ok) {
-                toast.error(payload?.message ?? 'Your plan limit was reached.', {
-                    description: 'Manage your plan in Settings → Plan & usage.',
+                const isPlanLimit = response.status === 422;
+                toast.error(payload?.message ?? 'Could not record usage for this check.', {
+                    description: isPlanLimit
+                        ? 'Manage your plan in Settings → Plan & usage.'
+                        : 'Please try again. If it keeps happening, refresh the page.',
                 });
                 return false;
             }
