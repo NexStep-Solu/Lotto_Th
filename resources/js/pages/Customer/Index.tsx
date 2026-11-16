@@ -7,8 +7,6 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 import { Eye, Pencil, Plus } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import OfflinePage from '../OfflinePage';
 
 interface Role {
     id: number;
@@ -38,16 +36,7 @@ export default function UsersIndex({ customers, userRole }: Props) {
             href: '/customers',
         },
     ];
-    const [online, setOnline] = useState(navigator.onLine);
 
-    useEffect(() => {
-        window.addEventListener('online', () => setOnline(true));
-        window.addEventListener('offline', () => setOnline(false));
-    }, []);
-
-    if (!online) {
-        return <OfflinePage />;
-    }
 
     return (
         <>

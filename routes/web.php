@@ -33,10 +33,6 @@ Route::prefix('api/lotto/sg')->middleware('throttle:lotto-api')->group(function 
     Route::get('list', [SgLottoController::class, 'list']);
 });
 
-Route::get('/offline', function () {
-    return view('offline');
-});
-
 Route::get('/', function () {
     return Inertia::render('welcome');
 })->name('home');

@@ -9,7 +9,6 @@
     <meta property="og:title" content="{{ config('app.name', 'Lotto Ledger') }}">
     <meta property="og:description" content="Check Thai and Singapore lottery numbers against the latest official draw.">
     <meta property="og:type" content="website">
-    <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#f3f0e7" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0b0f0d" media="(prefers-color-scheme: dark)">
 
@@ -40,9 +39,6 @@
     </style>
 
     <title inertia>{{ config('app.name', 'Laravel') }}</title>
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 
     <link rel="icon" href="/favicon.ico" sizes="any">
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
